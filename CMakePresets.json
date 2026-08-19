@@ -1,0 +1,109 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 28,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_CXX_COMPILER": "/opt/gcc-16.1/bin/g++"
+            }
+        },
+        {
+            "name": "debug",
+            "inherits": "base",
+            "displayName": "Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "LOGCHAIN_BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "inherits": "base",
+            "displayName": "Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "LOGCHAIN_BUILD_TESTS": "OFF"
+            }
+        },
+        {
+            "name": "asan",
+            "inherits": "debug",
+            "displayName": "Debug + Sanitizers",
+            "cacheVariables": {
+                "LOGCHAIN_ENABLE_SANITIZERS": "ON"
+            }
+        },
+        {
+            "name": "tsan",
+            "inherits": "debug",
+            "displayName": "Debug + Thread Sanitizers",
+            "cacheVariables": {
+                "LOGCHAIN_ENABLE_THREAD_SANITIZERS": "ON",
+                "LOGCHAIN_BUILD_STRESS_TESTS": "ON"
+            }
+        },
+        {
+            "name": "ci",
+            "inherits": "release",
+            "displayName": "CI (tests on, GTest FetchContent fallback allowed)",
+            "cacheVariables": {
+                "LOGCHAIN_BUILD_TESTS": "ON",
+                "LOGCHAIN_FETCH_GTEST": "ON",
+                "LOGCHAIN_WARNINGS_AS_ERRORS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
+        {
+            "name": "asan",
+            "configurePreset": "asan"
+        },
+        {
+            "name": "tsan",
+            "configurePreset": "tsan"
+        },
+        {
+            "name": "ci",
+            "configurePreset": "ci"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error"
+            }
+        },
+        {
+            "name": "ci",
+            "configurePreset": "ci",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error"
+            }
+        }
+    ]
+}
