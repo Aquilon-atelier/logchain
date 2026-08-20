@@ -44,11 +44,9 @@ The library does not require a global mutable logging context.
 
 ## Examples
 
-### Logging with explicit arguments
+### Explicit API
 
-The core logging API does not require macros.
-
-When argument names are provided explicitly, logging can be used with standard C++ only:
+The core logging API does not require macros. Argument names can be provided explicitly using `named()`:
 
 ```cpp
 logger.log_named(
@@ -59,13 +57,11 @@ logger.log_named(
     named("request_id", request_id));
 ```
 
-This form is fully explicit and does not rely on the preprocessor.
+This form uses standard C++ only and gives full control over the names of structured fields.
 
-It is a good choice for projects that prefer to avoid macros or when the field name should deliberately differ from the C++ identifier.
+### Reflection-assisted API
 
-### Logging with source-level argument names
-
-`logchain` also provides a convenience macro that uses C++26 static reflection to derive argument names from the source code:
+For applications that prefer a more concise syntax, `logchain` provides macros that use C++26 static reflection to derive argument names from the source code:
 
 ```cpp
 LOG_INFO(logger,
@@ -74,54 +70,9 @@ LOG_INFO(logger,
          extra(user, request_id));
 ```
 
-Here, `extra(user, request_id)` automatically produces fields named after the corresponding C++ identifiers:
+Here, `extra(user, request_id)` automatically uses the source-level identifiers as field names.
 
-```text
-user
-request_id
-```
-
-No field names have to be repeated at the call site.
-
-The macro is only syntactic sugar around the regular logging API. It does not introduce a different logging mechanism or a different event representation.
-
-### Choosing between the two
-
-Both forms produce the same kind of structured log event.
-
-Use the explicit API when:
-
-* you want to avoid macros entirely;
-* you want field names to be explicit;
-* the field name is intentionally different from the C++ identifier.
-
-Use `extra(...)` when:
-
-* you want concise logging calls;
-* the field names should match the C++ identifiers;
-* you want to take advantage of C++26 static reflection.
-
-For example, these two calls are equivalent from a structured logging perspective:
-
-```cpp
-logger.log_named(
-    LogLevel::info,
-    "request_handler {}",
-    handler,
-    named("user", user),
-    named("request_id", request_id));
-```
-
-and:
-
-```cpp
-LOG_INFO(logger,
-         "request_handler {}",
-         handler,
-         extra(user, request_id));
-```
-
-The choice is therefore primarily about API style: explicit standard C++ versus reflection-assisted convenience.
+The macro-based API is optional. Developers who prefer to avoid macros can use the explicit API without giving up structured logging.
 
 
 ## Installation

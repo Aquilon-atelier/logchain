@@ -51,7 +51,9 @@ target_link_libraries(my_application
 )
 ```
 
-## Basic usage (macro-based version of the API.)
+## Basic usage
+
+The following example creates a logger with both a console and a file sink:
 
 ```cpp
 #include "logger.hpp"
@@ -66,24 +68,51 @@ struct User {
 };
 
 int main() {
-
     const std::filesystem::path log_path{"/tmp/application.log"};
 
-    // Declare one or several seeks
     ConsoleSink console_sink;
     FileSink file_sink{log_path};
 
-    // Declare logger
     Logger logger{target(console_sink), target(file_sink)};
 
     User user{"bob"};
     std::string request_id{"req-A"};
     int retry_count{3};
 
-    // Log a message and possibly add extra info 
-    LOG_INFO(logger, "Request handled", user, request_id, retry_count);
+    LOG_INFO(logger,
+             "Request handled",
+             user,
+             extra(request_id, retry_count));
 }
 ```
 
+The same event can be rendered differently by the configured sinks.  
+For example, the console renderer can produce a human-readable representation:
 
+```text
+2026-08-20T15:42:17.381 INFO  Request handled
+```
 
+while a JSON renderer can preserve the structured fields:
+
+```json
+{
+  "timestamp": "2026-08-20T15:42:17.381Z",
+  "level": "INFO",
+  "message": "Request handled",
+  "request_id": "req-A",
+  "retry_count": 3
+}
+```
+
+The macro is optional. The same event can be created using the explicit API:
+
+```cpp
+logger.log_named(
+    LogLevel::info,
+    "Request handled",
+    named("request_id", request_id),
+    named("retry_count", retry_count));
+```
+
+This form does not use the preprocessor and is suitable for projects that prefer an explicit, macro-free API.
