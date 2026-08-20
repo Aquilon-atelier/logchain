@@ -117,3 +117,5 @@ logger.log_named(
 ```
 
 This form does not use the preprocessor and is suitable for projects that prefer an explicit, macro-free API.
+
+Next step : [Rendering](rendering.md)
