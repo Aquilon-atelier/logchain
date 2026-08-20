@@ -65,6 +65,7 @@ using namespace logchain;
 
 struct User {
     std::string name{"bob"};
+    unsigned int age;
 };
 
 int main() {
@@ -75,14 +76,13 @@ int main() {
 
     Logger logger{target(console_sink), target(file_sink)};
 
-    User user{"bob"};
+    User user{"bob", 35};
     std::string request_id{"req-A"};
     int retry_count{3};
 
     LOG_INFO(logger,
              "Request handled",
-             user,
-             extra(request_id, retry_count));
+             extra(request_id, user, retry_count));
 }
 ```
 
@@ -90,7 +90,7 @@ The same event can be rendered differently by the configured sinks.
 For example, the console renderer can produce a human-readable representation:
 
 ```text
-2026-08-20T15:42:17.381 INFO  Request handled
+2026-08-20T17:31:30.501852Z [INFO ] Request handled  request_id=req-A  user={name=bob age=35}  retry_count=3
 ```
 
 while a JSON renderer can preserve the structured fields:
@@ -100,6 +100,7 @@ while a JSON renderer can preserve the structured fields:
   "timestamp": "2026-08-20T15:42:17.381Z",
   "level": "INFO",
   "message": "Request handled",
+  "user":{"name":"bob","age":35},
   "request_id": "req-A",
   "retry_count": 3
 }
