@@ -57,7 +57,6 @@ include(cmake/Dependencies.cmake)
 add_library(logchain INTERFACE)
 add_library(logchain::logchain ALIAS logchain)
 
-
 target_include_directories(logchain INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
