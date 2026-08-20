@@ -22,23 +22,24 @@ using namespace logchain;
 TEST(console_sink, mem_check) {
 
     std::string user{"bob"};
-    std::string request_id_a{"req-A"};
-    std::string request_id_b{"req-B"};
+    std::string request_id{"req-A"};
     int retry_count{3};
 
-    // --- 5.1 Contrat de base : aucun wrapper, aucune annotation -----------
+    // --- 1. Contrat de base : LOG capture les noms depuis le texte source -
     ConsoleSink console_sink;
     Logger logger(console_sink);
-    logger.log("Hey, I handle these type variables", user, request_id_a, retry_count);
+    LOG(logger, "Request handled", user, request_id, retry_count);
+    // Sortie console attendue :
+    // {"message":"Request handled","user":"bob","request_id":"req-A","retry_count":3}
 
-    // --- 5.2 Preuve : immutabilité + partage mémoire (DAG) -----------------
-    // Deux branches construites depuis le même "with_user" partagent
-    // physiquement le même nœud User.
+    // --- 2. Preuve : immutabilité + partage mémoire (DAG), noms explicites -
+    // L'API bas niveau (Context::bind) exige toujours un nom ; ici on le
+    // fournit à la main puisqu'on n'appelle pas via la macro LOG.
     auto root = root_context();
-    auto with_user = root.bind(user);
+    auto with_user = root.bind("user", user);
 
-    auto request_a = with_user.bind(request_id_a).bind(retry_count);
-    auto request_b = with_user.bind(request_id_b).bind(0);
+    auto request_a = with_user.bind("request_id", request_id).bind("retry_count", retry_count);
+    auto request_b = with_user.bind("request_id", std::string{"req-B"}).bind("retry_count", 0);
 
     const void *user_node_via_a = request_a.underlying_node()->parent->parent.get();
     const void *user_node_via_b = request_b.underlying_node()->parent->parent.get();
@@ -63,8 +64,8 @@ TEST(file_sink, log) {
     {
         FileSink file_sink(log_path);
         Logger file_logger(file_sink);
-        file_logger.log("requete traitee", user, request_id_a, retry_count);
-        file_logger.log("requete traitee", user, request_id_b, 0);
+        LOG(file_logger, "requete traitee", user, request_id_a, retry_count);
+        LOG(file_logger, "requete traitee", user, request_id_b, 0);
     }
 
     std::ifstream in(log_path);

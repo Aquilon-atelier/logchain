@@ -21,7 +21,7 @@ add_executable(${PROJECT_NAME}_stress_tests
 target_link_libraries(${PROJECT_NAME}_stress_tests
     PRIVATE
         ${PROJECT_NAMESPACE}::${PROJECT_NAME}
-        GTest::gtest_main
+        pthread
 )
 
 apply_project_warnings(${PROJECT_NAME}_stress_tests)

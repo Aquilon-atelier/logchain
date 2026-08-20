@@ -10,7 +10,6 @@
 //   src/test_sink.cpp
 
 #include "logger.hpp"
-#include "sink.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -34,16 +33,16 @@ int main() {
 
         std::string user{"bob"};
         int retry_count{3};
-        file_logger.log("premiere ligne", user);
-        file_logger.log("deuxieme ligne", retry_count);
+        LOG(file_logger, "premiere ligne", user);
+        LOG(file_logger, "deuxieme ligne", retry_count);
     }
     {
         std::ifstream in(log_path);
         std::string line1, line2;
         std::getline(in, line1);
         std::getline(in, line2);
-        assert(line1 == R"({"message":"premiere ligne","fields":["bob"]})");
-        assert(line2 == R"({"message":"deuxieme ligne","fields":[3]})");
+        assert(line1 == R"({"message":"premiere ligne","user":"bob"})");
+        assert(line2 == R"({"message":"deuxieme ligne","retry_count":3})");
         std::cout << "Fichier relu correctement :\n  " << line1 << "\n  " << line2 << "\n";
     }
 
@@ -63,14 +62,14 @@ int main() {
             threads.emplace_back([&shared_sink, t] {
                 Logger logger(shared_sink); // un Logger par thread, un seul Sink
                 for (int i = 0; i < kLogsPerThread; ++i) {
-                    logger.log("thread-message", t, i);
+                    LOG(logger, "thread-message", t, i);
                 }
             });
         }
         for (auto &th : threads)
             th.join();
 
-        const std::string prefix = R"({"message":"thread-message","fields":[)";
+        const std::string prefix = R"({"message":"thread-message","t":)";
 
         std::ifstream in(log_path);
         std::size_t line_count = 0;

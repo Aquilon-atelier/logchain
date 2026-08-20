@@ -16,7 +16,6 @@
 
 set(EXAMPLES
     basic_example
-    context_binding_demo
 )
 
 foreach(example IN LISTS EXAMPLES)
@@ -32,6 +31,7 @@ foreach(example IN LISTS EXAMPLES)
         ${PROJECT_NAME}_${example}
         PRIVATE
             ${PROJECT_NAMESPACE}::${PROJECT_NAME}
+        pthread
     )
 
     apply_project_warnings(${PROJECT_NAME}_${example})

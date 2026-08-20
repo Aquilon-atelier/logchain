@@ -1,6 +1,7 @@
 #pragma once
 #include "context.hpp"
 #include "json_render.hpp"
+#include "log_macro.hpp"
 #include "sink.hpp"
 
 #include <concepts>
@@ -18,8 +19,8 @@ class Logger {
         requires(std::derived_from<SinkT, Sink> && ...)
     explicit Logger(SinkT &...sinks) : sinks_{&sinks...} {}
 
-    template <typename... Args> void log(std::string_view message, Args &&...args) {
-        auto ctx = make_context(std::forward<Args>(args)...);
+    template <typename... Ts> void log_named(std::string_view message, detail::Named<Ts>... named_args) {
+        auto ctx = make_context(std::move(named_args)...);
         write(ctx, message);
     }
 
