@@ -1,6 +1,7 @@
 #pragma once
 
 #include "context.hpp"
+#include "detail/timestamp.hpp"
 #include "event.hpp"
 
 #include <cstddef>
@@ -9,11 +10,124 @@
 #include <string_view>
 #include <type_traits>
 
+#if defined(_WIN32)
+#include <io.h>
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO 1
+#endif
+#define LOGCHAIN_ISATTY _isatty
+#else
+#include <unistd.h>
+#define LOGCHAIN_ISATTY isatty
+#endif
+
 namespace logchain {
 
 enum class ColorMode { Auto, Always, Never };
 
 namespace detail {
+
+// ===========================================================================
+// Console colors
+// ===========================================================================
+
+inline constexpr std::string_view ansi_reset = "\033[0m";
+inline constexpr std::string_view ansi_gray = "\033[90m";
+inline constexpr std::string_view ansi_cyan = "\033[36m";
+inline constexpr std::string_view ansi_green = "\033[32m";
+inline constexpr std::string_view ansi_yellow = "\033[33m";
+inline constexpr std::string_view ansi_red = "\033[31m";
+inline constexpr std::string_view ansi_bright_red = "\033[91m";
+
+inline constexpr std::string_view console_level_name(LogLevel level) {
+
+    switch (level) {
+    case LogLevel::trace:
+        return "TRACE";
+
+    case LogLevel::debug:
+        return "DEBUG";
+
+    case LogLevel::info:
+        return "INFO ";
+
+    case LogLevel::warning:
+        return "WARN ";
+
+    case LogLevel::error:
+        return "ERROR";
+
+    case LogLevel::fatal:
+        return "FATAL";
+    }
+
+    return "?????";
+}
+
+inline constexpr std::string_view console_level_color(LogLevel level) {
+
+    switch (level) {
+    case LogLevel::trace:
+        return ansi_gray;
+
+    case LogLevel::debug:
+        return ansi_cyan;
+
+    case LogLevel::info:
+        return ansi_green;
+
+    case LogLevel::warning:
+        return ansi_yellow;
+
+    case LogLevel::error:
+        return ansi_red;
+
+    case LogLevel::fatal:
+        return ansi_bright_red;
+    }
+
+    return {};
+}
+
+inline bool console_supports_color() {
+
+#if defined(_WIN32)
+    return LOGCHAIN_ISATTY(STDOUT_FILENO) != 0;
+#else
+    return LOGCHAIN_ISATTY(STDOUT_FILENO) != 0;
+#endif
+}
+
+inline void append_console_level(std::string &out, LogLevel level, ColorMode colors) {
+
+    const auto name = console_level_name(level);
+
+    bool use_color = false;
+
+    switch (colors) {
+    case ColorMode::Always:
+        use_color = true;
+        break;
+
+    case ColorMode::Never:
+        use_color = false;
+        break;
+
+    case ColorMode::Auto:
+        use_color = console_supports_color();
+        break;
+    }
+
+    if (use_color) {
+        out += console_level_color(level);
+    }
+
+    out += name;
+
+    if (use_color) {
+        out += ansi_reset;
+    }
+}
 
 // ===========================================================================
 // Console string rendering
@@ -172,6 +286,12 @@ struct ConsoleRenderer {
 
         out.reserve(event.message.size() + 64);
 
+        out += detail::format_timestamp(event.timestamp);
+        out += " [";
+
+        detail::append_console_level(out, event.level, colors);
+
+        out += "] ";
         out += event.message;
 
         detail::append_console_fields(*context.underlying_node(), out);
@@ -181,3 +301,5 @@ struct ConsoleRenderer {
 };
 
 } // namespace logchain
+
+#undef LOGCHAIN_ISATTY

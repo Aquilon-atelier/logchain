@@ -1,9 +1,5 @@
 # Getting Started
 
-## Integrating logchain
-
-# Getting Started
-
 ## Compiler support
 
 `logchain` requires a C++26 compiler supporting static reflection (P2996).  
@@ -55,11 +51,10 @@ target_link_libraries(my_application
 )
 ```
 
-## Basic usage 
+## Basic usage (macro-based version of the API.)
 
 ```cpp
 #include "logger.hpp"
-#include "sink.hpp"
 
 #include <filesystem>
 #include <string>
@@ -79,14 +74,14 @@ int main() {
     FileSink file_sink{log_path};
 
     // Declare logger
-    Logger logger{make_target(console_sink), make_target(file_sink)};
+    Logger logger{target(console_sink), target(file_sink)};
 
     User user{"bob"};
     std::string request_id{"req-A"};
     int retry_count{3};
 
     // Log a message and possibly add extra info 
-    LOG(logger, "Request handled", user, request_id, retry_count);
+    LOG_INFO(logger, "Request handled", user, request_id, retry_count);
 }
 ```
 

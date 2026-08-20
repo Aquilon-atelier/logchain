@@ -25,16 +25,16 @@ TEST(console_sink, mem_check) {
     std::string request_id{"req-A"};
     int retry_count{3};
 
-    // --- 1. Contrat de base : LOG capture les noms depuis le texte source -
+    // Basic contract: LOG captures names from the source text
     ConsoleSink console_sink;
-    Logger logger(make_target(console_sink));
-    LOG(logger, "Request handled", user, request_id, retry_count);
-    // Sortie console attendue :
+    Logger logger(target(console_sink));
+    LOG(logger, LogLevel::info, "Request handled", user, request_id, retry_count);
+    // Expected console output:
     // {"message":"Request handled","user":"bob","request_id":"req-A","retry_count":3}
 
-    // --- 2. Preuve : immutabilité + partage mémoire (DAG), noms explicites -
-    // L'API bas niveau (Context::bind) exige toujours un nom ; ici on le
-    // fournit à la main puisqu'on n'appelle pas via la macro LOG.
+    // Rationale: immutability + memory sharing (DAG), explicit names
+    // The low-level API (Context::bind) always requires a name;
+    // here, we provide it manually since we are not calling via the LOG macro.
     auto root = root_context();
     auto with_user = root.bind("user", user);
 
@@ -58,14 +58,14 @@ TEST(file_sink, log) {
     std::string request_id_b{"req-B"};
     int retry_count{3};
 
-    // --- 5.3 Sink réel : écriture fichier + relecture ----------------------
+    // Real sink: file write + read-back
     const fs::path log_path = "demo_output.log";
     fs::remove(log_path);
     {
         FileSink file_sink(log_path);
-        Logger file_logger(make_target(file_sink));
-        LOG(file_logger, "requete traitee", user, request_id_a, retry_count);
-        LOG(file_logger, "requete traitee", user, request_id_b, 0);
+        Logger file_logger(target(file_sink));
+        LOG(file_logger, LogLevel::info, "requete traitee", user, request_id_a, retry_count);
+        LOG(file_logger, LogLevel::info, "requete traitee", user, request_id_b, 0);
     }
 
     std::ifstream in(log_path);
@@ -98,6 +98,6 @@ TEST(multiple_sink, explicit_target_decl) {
     User albert_londre{"Albert", "Londre", 65};
     User romain_garry{"Romain", "Garry", 53};
 
-    LOG(logger, "Request handled", albert_londre, romain_garry);
+    LOG(logger, LogLevel::info, "Request handled", albert_londre, romain_garry);
     fs::remove(log_path);
 }

@@ -20,6 +20,19 @@ namespace logchain {
 
 #define SCL_NAMED_ARG(x) logchain::detail::make_named(#x, (x))
 
-#define LOG(logger, message, ...) (logger).log_named((message)__VA_OPT__(, SCL_FOR_EACH(SCL_NAMED_ARG, __VA_ARGS__)))
+#define LOG(logger, level, message, ...)                                                                               \
+    (logger).log_named((level), (message)__VA_OPT__(, SCL_FOR_EACH(SCL_NAMED_ARG, __VA_ARGS__)))
+
+#define LOG_TRACE(logger, message, ...) LOG(logger, ::logchain::LogLevel::trace, message __VA_OPT__(, ) __VA_ARGS__)
+
+#define LOG_DEBUG(logger, message, ...) LOG(logger, ::logchain::LogLevel::debug, message __VA_OPT__(, ) __VA_ARGS__)
+
+#define LOG_INFO(logger, message, ...) LOG(logger, ::logchain::LogLevel::info, message __VA_OPT__(, ) __VA_ARGS__)
+
+#define LOG_WARN(logger, message, ...) LOG(logger, ::logchain::LogLevel::warning, message __VA_OPT__(, ) __VA_ARGS__)
+
+#define LOG_ERROR(logger, message, ...) LOG(logger, ::logchain::LogLevel::error, message __VA_OPT__(, ) __VA_ARGS__)
+
+#define LOG_FATAL(logger, message, ...) LOG(logger, ::logchain::LogLevel::fatal, message __VA_OPT__(, ) __VA_ARGS__)
 
 } // namespace logchain

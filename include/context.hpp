@@ -14,12 +14,13 @@
 namespace logchain {
 
 // ===========================================================================
-// 1. Contexte persistant : nœud immuable + sentinelle racine
+// Persistent context: immutable node + root sentinel
 //
-// Chaque nœud porte maintenant un NOM (const char*, littéral de durée de vie
-// statique fourni par la macro LOG via stringification du texte source, cf.
-// log_macro.hpp) en plus de sa valeur. Le nom n'est jamais déduit ni réfléchi
-// ici : context.hpp reste agnostique de la façon dont le nom a été obtenu.
+// Each node now carries a NAME (const char*, a static-lifetime literal
+// provided by the LOG macro via source text stringification; see
+// log_macro.hpp) in addition to its value. The name is neither inferred
+// nor reflected here: context.hpp remains agnostic regarding how the
+// name was obtained.
 // ===========================================================================
 
 struct RootNode {};
@@ -38,8 +39,8 @@ template <typename NodeT> class Context {
 
     template <typename U> auto bind(const char *name, U &&value) const {
         using StoredT = std::decay_t<U>;
-        // Aggregate init par parenthèses (P0960, C++20) : une seule
-        // allocation pour le nouveau nœud, aucune copie intermédiaire.
+        // Parenthesized aggregate initialization (P0960, C++20): a single
+        // allocation for the new node, no intermediate copies.
         auto new_node = std::make_shared<const ContextNode<StoredT, NodeT>>(name, std::forward<U>(value), node_);
         return Context<ContextNode<StoredT, NodeT>>(std::move(new_node));
     }
@@ -53,12 +54,12 @@ template <typename NodeT> class Context {
 inline Context<RootNode> root_context() { return Context<RootNode>(std::make_shared<const RootNode>()); }
 
 // ===========================================================================
-// 2. Construction depuis un pack de (nom, valeur) : récursion de templates
-//    (un fold expression à assignation ne type-check pas ici, cf. spec §4)
+// Construction from a (name, value) pack: template recursion
+// (an assignment fold expression does not type-check here; see spec §4)
 //
-// Chaque argument arrive sous forme de Named<T> (nom + valeur), produit par
-// la macro NAMED_ARG / LOG — voir log_macro.hpp. make_context() ignore
-// totalement COMMENT le nom a été obtenu ; il consomme juste des Named<T>.
+// Each argument arrives as a Named<T> (name + value), produced by the
+// NAMED_ARG / LOG macro — see log_macro.hpp. make_context() completely
+// ignores HOW the name was obtained; it simply consumes Named<T> objects.
 // ===========================================================================
 
 namespace detail {

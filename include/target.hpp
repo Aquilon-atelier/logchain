@@ -51,7 +51,7 @@ Target(RendererT, SinkT &) -> Target<RendererT>;
 // Default target
 // ===========================================================================
 
-template <typename SinkT> auto make_target(SinkT &sink) {
+template <typename SinkT> auto target(SinkT &sink) {
     using RendererT = default_renderer_for_t<SinkT>;
 
     return Target{RendererT{}, sink};

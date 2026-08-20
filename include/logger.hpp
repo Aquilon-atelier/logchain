@@ -5,6 +5,7 @@
 #include "log_macro.hpp"
 #include "target.hpp"
 
+#include <chrono>
 #include <concepts>
 #include <tuple>
 #include <utility>
@@ -26,11 +27,16 @@ template <typename... TargetT> class Logger {
   public:
     explicit Logger(TargetT... targets) : targets_(std::move(targets)...) {}
 
-    template <typename... Ts> void log_named(std::string_view message, detail::Named<Ts>... named_args) {
+    template <typename... Ts>
+    void log_named(LogLevel level, std::string_view message, detail::Named<Ts>... named_args) {
 
         auto ctx = make_context(std::move(named_args)...);
 
-        LogEvent event{.message = message};
+        LogEvent event{
+            .level = level,
+            .timestamp = std::chrono::system_clock::now(),
+            .message = message,
+        };
 
         write(event, ctx);
     }

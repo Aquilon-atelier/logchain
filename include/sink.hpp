@@ -11,7 +11,7 @@
 namespace logchain {
 
 // ===========================================================================
-// 3. Sink : seule frontière polymorphique du système (choix runtime)
+// Sink: the system's only polymorphic boundary (runtime choice)
 // ===========================================================================
 
 class Sink {

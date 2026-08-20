@@ -1,6 +1,7 @@
 #pragma once
 
 #include "context.hpp"
+#include "detail/timestamp.hpp"
 
 #include <cstddef>
 #include <cstdio>
@@ -11,23 +12,23 @@
 #include <vector>
 
 // ===========================================================================
-// Rendu JSON du contexte : ContextNode<T, Parent> (statique, nommé) ->
+// JSON rendering of the context: ContextNode<T, Parent> (static, named) ->
 // std::string.
 //
-// Ce fichier reste entièrement en amont de la frontière polymorphique
-// définie dans sink.hpp : il produit un std::string complet, que Logger
-// passe ensuite à Sink::write(std::string_view). Sink ne voit jamais un
-// nom, une valeur typée, ou quoi que ce soit du contexte — juste du texte
-// déjà formé. Cette frontière n'a pas bougé depuis la version précédente.
+// This file remains entirely upstream of the polymorphic boundary
+// defined in sink.hpp: it produces a complete std::string, which Logger
+// then passes to Sink::write(std::string_view). Sink never sees a
+// name, a typed value, or anything else from the context—just
+// pre-formatted text. This boundary has not changed since the previous version.
 //
-// Deux sources de "nom" bien distinctes, à ne pas confondre :
-//   - le nom au sommet (clé de "user", "request_id"...) vient du texte
-//     source de l'appel, capturé par macro (log_macro.hpp) — PAS de la
-//     réflexion, cette info n'existe nulle part dans le type système.
-//   - le nom des membres d'un agrégat imbriqué ("name" dans {"name":"bob"})
-//     vient de la réflexion sur le TYPE de l'agrégat (nonstatic_data_members_of)
-//     — cette info existe réellement dans le type, contrairement au nom de
-//     variable au site d'appel.
+// Two distinct sources of "names," not to be confused:
+//   - the top-level name (key such as "user", "request_id"...) comes from the
+//     call site's source text, captured via macro (log_macro.hpp)—NOT from
+//     reflection; this information does not exist anywhere in the type system.
+//   - the name of nested aggregate members ("name" in {"name":"bob"})
+//     comes from reflection on the aggregate's TYPE (nonstatic_data_members_of)
+//     —this information actually exists within the type, unlike the variable
+//     name at the call site.
 // ===========================================================================
 
 namespace logchain {
@@ -72,8 +73,8 @@ inline std::string json_escape_string(std::string_view s) {
 
 } // namespace detail
 
-// --- Déclarations avancées : to_json et le fallback agrégat s'appellent
-//     mutuellement (un membre d'agrégat peut lui-même être un agrégat). ----
+// --- Forward declarations: to_json and the aggregate fallback call each other
+//     (an aggregate member can itself be an aggregate). ----
 
 template <typename T> std::string to_json(const T &v);
 
@@ -81,11 +82,11 @@ namespace detail {
 template <typename T> std::string aggregate_to_json(const T &obj);
 } // namespace detail
 
-// --- Sérialisation d'une valeur ---------------------------------------------
+// --- Serialization of a value ----------------------------------------------
 //
-// Dispatch statique (if constexpr). Type non couvert par les branches
-// scalaires -> tentative via réflexion s'il s'agit d'un agrégat au sens du
-// langage (is_aggregate_v) -> sinon échec de compilation explicite.
+// Static dispatch (if constexpr). Type not covered by scalar branches
+// -> attempt via reflection if it is an aggregate in the language sense
+// (is_aggregate_v) -> otherwise, explicit compilation failure.
 template <typename T> std::string to_json(const T &v) {
     using D = std::decay_t<T>;
     if constexpr (std::is_same_v<D, std::string> || std::is_same_v<D, std::string_view>) {
@@ -107,19 +108,18 @@ template <typename T> std::string to_json(const T &v) {
 namespace detail {
 
 // ---------------------------------------------------------------------
-// Fallback agrégat : nonstatic_data_members_of() (P2996).
+// Aggregate fallback: nonstatic_data_members_of() (P2996).
 //
-// Le tableau de membres est exposé via un membre STATIQUE d'un struct
-// templaté sur T (MembersOf<T>::value), jamais via un paramètre de
-// fonction. C'est la correction du bug rapporté par ton build : un
-// paramètre de fonction n'est jamais une expression constante à
-// l'intérieur du corps de la fonction, même si l'argument passé au site
-// d'appel est static constexpr — donc ni members.size() ni members[I]
-// n'auraient pu être utilisés comme expressions constantes une fois
-// "members" reçu comme const MembersT&. MembersOf<T>::value, en tant que
-// membre statique constexpr, reste une expression constante partout où T
-// est visible, à tous les niveaux de récursion, sans jamais transiter par
-// un paramètre.
+// The array of members is exposed via a STATIC member of a struct
+// templated on T (MembersOf<T>::value), never via a function parameter.
+// This fixes the bug reported by your build: a function parameter is
+// never a constant expression within the function body, even if the
+// argument passed at the call site is static constexpr—so neither
+// members.size() nor members[I] could have been used as constant
+// expressions once "members" was received as const MembersT&.
+// MembersOf<T>::value, as a static constexpr member, remains a constant
+// expression wherever T is visible—at all recursion levels—without ever
+// passing through a parameter.
 template <typename T> struct MembersOf {
     static constexpr auto value =
         std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::current()));
@@ -150,12 +150,12 @@ template <typename T> std::string aggregate_to_json(const T &obj) {
 }
 } // namespace detail
 
-// --- Parcours du DAG dans l'ordre d'origine, en objet nommé ----------------
+// --- DAG traversal in original order, as a named object ---------------------
 //
-// Contrairement à la version précédente (tableau positionnel), chaque nœud
-// porte déjà son nom (capturé au site d'appel par la macro LOG) : le rendu
-// produit directement des paires "nom":valeur, prêtes à être fusionnées
-// dans l'objet top-level aux côtés de "message".
+// Unlike the previous version (positional array), each node already carries
+// its name (captured at the call site by the LOG macro): the output directly
+// produces "name":value pairs, ready to be merged into the top-level object
+// alongside "message".
 
 inline void collect_json_fields(const RootNode &, std::vector<std::string> &) {}
 
@@ -167,27 +167,6 @@ void collect_json_fields(const ContextNode<T, ParentNode> &node, std::vector<std
     entry += to_json(node.value);
     out.push_back(std::move(entry));
 }
-
-// --- Ligne de log complète : objet plat -------------------------------------
-//
-// {"message": "...", "user": {"name": "bob"}, "request_id": "req-A", ...}
-//
-// C'est CETTE string, et rien d'autre, qui traverse la frontière
-// polymorphique vers Sink::write().
-
-// template <typename NodeT> std::string build_log_line(const Context<NodeT> &ctx, std::string_view message) {
-//     std::vector<std::string> fields;
-//     collect_json_fields(*ctx.underlying_node(), fields);
-
-//     std::string out = "{\"message\":";
-//     out += detail::json_escape_string(message);
-//     for (const auto &field : fields) {
-//         out += ',';
-//         out += field;
-//     }
-//     out += "}";
-//     return out;
-// }
 
 // ===========================================================================
 // JSON Lines renderer
@@ -210,7 +189,13 @@ struct JsonRenderer {
         // Rough initial estimate. The string will grow if necessary.
         out.reserve(event.message.size() + 32 + fields.size() * 16);
 
-        out += "{\"message\":";
+        out += "{\"timestamp\":";
+        out += detail::json_escape_string(detail::format_timestamp(event.timestamp));
+
+        out += ",\"level\":";
+        out += detail::json_escape_string(to_string(event.level));
+
+        out += ",\"message\":";
         out += detail::json_escape_string(event.message);
 
         for (const auto &field : fields) {

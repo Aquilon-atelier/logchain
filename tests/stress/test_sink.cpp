@@ -1,13 +1,7 @@
 // test_sink.cpp
 //
-// Validation du Sink : écriture réelle + concurrence. Reste séparé de
-// context_binding_demo.cpp (délibérément) pour garder la démo lisible.
+// Sink validation: actual writing + concurrency.
 //
-// Compilation normale :
-//   g++ -std=c++20 -Wall -Wextra -Wpedantic -pthread -Iinclude -o test_sink src/test_sink.cpp
-// Compilation TSan :
-//   g++ -std=c++20 -Wall -Wextra -Wpedantic -fsanitize=thread -g -O1 -pthread -Iinclude -o test_sink_tsan
-//   src/test_sink.cpp
 
 #include "logger.hpp"
 
@@ -15,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -26,30 +21,36 @@ int main() {
     const fs::path log_path = "sink_test_output.log";
     fs::remove(log_path);
 
-    // --- 1. Fonctionnel : écriture fichier + relecture, contenu exact -----
+    // Functional: file writing + reading back, exact content -----
     {
         FileSink file_sink(log_path);
-        Logger file_logger(make_target(file_sink));
+        Logger file_logger(target(file_sink));
 
         std::string user{"bob"};
         int retry_count{3};
-        LOG(file_logger, "premiere ligne", user);
-        LOG(file_logger, "deuxieme ligne", retry_count);
+        LOG(file_logger, LogLevel::info, "premiere ligne", user);
+        LOG(file_logger, LogLevel::info, "deuxieme ligne", retry_count);
     }
     {
         std::ifstream in(log_path);
         std::string line1, line2;
         std::getline(in, line1);
         std::getline(in, line2);
-        assert(line1 == R"({"message":"premiere ligne","user":"bob"})");
-        assert(line2 == R"({"message":"deuxieme ligne","retry_count":3})");
+        const std::regex line1_re(
+            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"premiere ligne","user":"bob"\})");
+
+        const std::regex line2_re(
+            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"deuxieme ligne","retry_count":3\})");
+
+        assert(std::regex_match(line1, line1_re));
+        assert(std::regex_match(line2, line2_re));
         std::cout << "Fichier relu correctement :\n  " << line1 << "\n  " << line2 << "\n";
     }
 
-    // --- 2. Concurrence : N threads, chacun M logs, un seul FileSink ------
-    //        partagé. On vérifie qu'aucune ligne n'est tronquée / fusionnée
-    //        et que chaque ligne est un objet JSON bien formé pour ce site
-    //        d'appel (le mutex vit dans FileSink, cf. spec §9.2).
+    // Concurrency: N threads, each with M logs, a single shared
+    // FileSink. We verify that no line is truncated or merged
+    // and that each line is a well-formed JSON object for that
+    // call site (the mutex resides in FileSink; see spec §9.2).
     {
         fs::remove(log_path);
         FileSink shared_sink(log_path);
@@ -60,29 +61,32 @@ int main() {
         std::vector<std::thread> threads;
         for (int t = 0; t < kThreads; ++t) {
             threads.emplace_back([&shared_sink, t] {
-                Logger logger(make_target(shared_sink)); // un Logger par thread, un seul Sink
+                Logger logger(target(shared_sink)); // one Logger per thread, a single Sink
                 for (int i = 0; i < kLogsPerThread; ++i) {
-                    LOG(logger, "thread-message", t, i);
+                    LOG(logger, LogLevel::info, "thread-message", t, i);
                 }
             });
         }
         for (auto &th : threads)
             th.join();
-
-        const std::string prefix = R"({"message":"thread-message","t":)";
+        const std::regex line_re(
+            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"thread-message","t":\d+\,"i":\d+\})");
 
         std::ifstream in(log_path);
         std::size_t line_count = 0;
         std::string line;
+
         while (std::getline(in, line)) {
-            // Ligne bien formée : pas de parsing JSON complet nécessaire ici,
-            // juste la preuve qu'aucune écriture concurrente n'a coupé ou
-            // entrelacé une ligne avec une autre.
-            assert(line.rfind(prefix, 0) == 0);
+            // Each line must constitute a complete JSON event.
+            // The timestamp is structurally validated, but its value is dynamic.
+            assert(std::regex_match(line, line_re));
             assert(!line.empty() && line.back() == '}');
+
             ++line_count;
         }
+
         assert(line_count == static_cast<std::size_t>(kThreads * kLogsPerThread));
+
         std::cout << "Concurrence : " << line_count << " lignes écrites par 8 threads, aucune corruption.\n";
     }
 

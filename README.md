@@ -9,7 +9,7 @@ TODO: Explain
 
 ### Thread safety
 
-`logchain` is thread-safe and reentrant. Concurrent calls to `logchain::log()` are safe.
+`logchain` is thread-safe and reentrant. Concurrent calls to `logger::log()` are safe.
 
 
 ## Examples
