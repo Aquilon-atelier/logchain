@@ -113,10 +113,9 @@ template <typename T> std::string to_json(const T &v) {
     } else if constexpr (std::is_class_v<D> && std::is_aggregate_v<D>) {
         return detail::aggregate_to_json(v);
     } else {
-        static_assert(!sizeof(T), "to_json: type non pris en charge. Ni un scalaire connu, ni un "
-                                  "agregat reflechissable "
-                                  "is_aggregate_v<T> doit etre vrai). Ajoute une branche if "
-                                  "constexpr explicite si ce type doit devenir loggable.");
+        static_assert(!sizeof(T), "to_json: unsupported type. Neither a known scalar nor a "
+                                  "reflectable aggregate (is_aggregate_v<T> must be true). "
+                                  "Add an explicit if constexpr branch if this type is to become loggable.");
     }
 }
 
