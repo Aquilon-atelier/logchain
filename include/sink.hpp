@@ -1,8 +1,3 @@
-
-// ===========================================================================
-// 3. Sink : seule frontière polymorphique du système (choix runtime)
-// ===========================================================================
-
 #pragma once
 
 #include <filesystem>
@@ -11,8 +6,13 @@
 #include <mutex>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
 namespace logchain {
+
+// ===========================================================================
+// 3. Sink : seule frontière polymorphique du système (choix runtime)
+// ===========================================================================
 
 class Sink {
   public:

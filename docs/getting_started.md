@@ -79,14 +79,14 @@ int main() {
     FileSink file_sink{log_path};
 
     // Declare logger
-    Logger logger{console_sink, file_sink};
+    Logger logger{make_target(console_sink), make_target(file_sink)};
 
     User user{"bob"};
     std::string request_id{"req-A"};
     int retry_count{3};
 
     // Log a message and possibly add extra info 
-    logger.log("Request handled", user, request_id, retry_count);
+    LOG(logger, "Request handled", user, request_id, retry_count);
 }
 ```
 

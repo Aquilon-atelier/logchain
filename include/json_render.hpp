@@ -175,18 +175,53 @@ void collect_json_fields(const ContextNode<T, ParentNode> &node, std::vector<std
 // C'est CETTE string, et rien d'autre, qui traverse la frontière
 // polymorphique vers Sink::write().
 
-template <typename NodeT> std::string build_log_line(const Context<NodeT> &ctx, std::string_view message) {
-    std::vector<std::string> fields;
-    collect_json_fields(*ctx.underlying_node(), fields);
+// template <typename NodeT> std::string build_log_line(const Context<NodeT> &ctx, std::string_view message) {
+//     std::vector<std::string> fields;
+//     collect_json_fields(*ctx.underlying_node(), fields);
 
-    std::string out = "{\"message\":";
-    out += detail::json_escape_string(message);
-    for (const auto &field : fields) {
-        out += ',';
-        out += field;
+//     std::string out = "{\"message\":";
+//     out += detail::json_escape_string(message);
+//     for (const auto &field : fields) {
+//         out += ',';
+//         out += field;
+//     }
+//     out += "}";
+//     return out;
+// }
+
+// ===========================================================================
+// JSON Lines renderer
+//
+// The renderer is entirely independent from Sink.
+// It produces a complete JSON object for one log event.
+// ===========================================================================
+
+struct JsonRenderer {
+
+    template <typename Event, typename NodeT>
+    std::string render(const Event &event, const Context<NodeT> &context) const {
+
+        std::vector<std::string> fields;
+
+        collect_json_fields(*context.underlying_node(), fields);
+
+        std::string out;
+
+        // Rough initial estimate. The string will grow if necessary.
+        out.reserve(event.message.size() + 32 + fields.size() * 16);
+
+        out += "{\"message\":";
+        out += detail::json_escape_string(event.message);
+
+        for (const auto &field : fields) {
+            out += ',';
+            out += field;
+        }
+
+        out += '}';
+
+        return out;
     }
-    out += "}";
-    return out;
-}
+};
 
 } // namespace logchain

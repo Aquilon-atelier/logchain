@@ -27,7 +27,7 @@ TEST(console_sink, mem_check) {
 
     // --- 1. Contrat de base : LOG capture les noms depuis le texte source -
     ConsoleSink console_sink;
-    Logger logger(console_sink);
+    Logger logger(make_target(console_sink));
     LOG(logger, "Request handled", user, request_id, retry_count);
     // Sortie console attendue :
     // {"message":"Request handled","user":"bob","request_id":"req-A","retry_count":3}
@@ -63,7 +63,7 @@ TEST(file_sink, log) {
     fs::remove(log_path);
     {
         FileSink file_sink(log_path);
-        Logger file_logger(file_sink);
+        Logger file_logger(make_target(file_sink));
         LOG(file_logger, "requete traitee", user, request_id_a, retry_count);
         LOG(file_logger, "requete traitee", user, request_id_b, 0);
     }
@@ -76,5 +76,28 @@ TEST(file_sink, log) {
         ++count;
     }
     assert(count == 2);
+    fs::remove(log_path);
+}
+
+TEST(multiple_sink, explicit_target_decl) {
+
+    struct User {
+        std::string firstname;
+        std::string lastname;
+        unsigned int age;
+    };
+
+    namespace fs = std::filesystem;
+    const std::filesystem::path log_path{"/tmp/application.log"};
+
+    ConsoleSink console_sink;
+    FileSink file_sink{log_path};
+
+    Logger logger{Target{ConsoleRenderer{}, console_sink}, Target{JsonRenderer{}, file_sink}};
+
+    User albert_londre{"Albert", "Londre", 65};
+    User romain_garry{"Romain", "Garry", 53};
+
+    LOG(logger, "Request handled", albert_londre, romain_garry);
     fs::remove(log_path);
 }

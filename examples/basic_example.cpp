@@ -20,7 +20,7 @@ int main() {
     ConsoleSink console_sink;
     FileSink file_sink{log_path};
 
-    Logger logger{console_sink, file_sink};
+    Logger logger{make_target(console_sink), make_target(file_sink)};
 
     User user{"bob", 35};
     std::string request_id{"req-A"};

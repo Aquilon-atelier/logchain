@@ -29,7 +29,7 @@ int main() {
     // --- 1. Fonctionnel : écriture fichier + relecture, contenu exact -----
     {
         FileSink file_sink(log_path);
-        Logger file_logger(file_sink);
+        Logger file_logger(make_target(file_sink));
 
         std::string user{"bob"};
         int retry_count{3};
@@ -60,7 +60,7 @@ int main() {
         std::vector<std::thread> threads;
         for (int t = 0; t < kThreads; ++t) {
             threads.emplace_back([&shared_sink, t] {
-                Logger logger(shared_sink); // un Logger par thread, un seul Sink
+                Logger logger(make_target(shared_sink)); // un Logger par thread, un seul Sink
                 for (int i = 0; i < kLogsPerThread; ++i) {
                     LOG(logger, "thread-message", t, i);
                 }

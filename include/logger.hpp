@@ -1,41 +1,56 @@
 #pragma once
+
 #include "context.hpp"
-#include "json_render.hpp"
+#include "event.hpp"
 #include "log_macro.hpp"
-#include "sink.hpp"
+#include "target.hpp"
 
 #include <concepts>
-#include <vector>
+#include <tuple>
+#include <utility>
 
 namespace logchain {
 
 // ===========================================================================
-// 4. Logger : relie construction statique du contexte et sink runtime
+// Logger
+//
+// Rendering is statically dispatched through Target<RendererT>.
+//
+// The only runtime polymorphic call in the complete pipeline is:
+//     Sink::write(std::string_view)
+//
+// Logger itself does not perform virtual dispatch.
 // ===========================================================================
 
-class Logger {
+template <typename... TargetT> class Logger {
   public:
-    template <typename... SinkT>
-        requires(std::derived_from<SinkT, Sink> && ...)
-    explicit Logger(SinkT &...sinks) : sinks_{&sinks...} {}
+    explicit Logger(TargetT... targets) : targets_(std::move(targets)...) {}
 
     template <typename... Ts> void log_named(std::string_view message, detail::Named<Ts>... named_args) {
+
         auto ctx = make_context(std::move(named_args)...);
-        write(ctx, message);
+
+        LogEvent event{.message = message};
+
+        write(event, ctx);
     }
 
   private:
-    template <typename NodeT> void write(const Context<NodeT> &ctx, std::string_view message) {
-        for (Sink *sink : sinks_) {
-            // Rendu JSON entièrement statique (récursion sur le DAG de types,
-            // résolue à la compilation). Sink ne voit jamais que le résultat :
-            // un std::string_view déjà formé. C'est le SEUL point de dispatch
-            // runtime (virtual) de tout le pipeline log() -> écriture.
-            sink->write(build_log_line(ctx, message));
-        }
+    template <typename Event, typename NodeT> void write(const Event &event, const Context<NodeT> &context) {
+
+        std::apply([&](auto &...target) { (target.write(event, context), ...); }, targets_);
     }
 
-    std::vector<Sink *> sinks_;
+    std::tuple<TargetT...> targets_;
 };
+
+// CTAD:
+//
+// Logger{Target{JsonRenderer{}, file_sink},
+//        Target{ConsoleRenderer{}, console_sink}}
+//
+// -> Logger<Target<JsonRenderer>, Target<ConsoleRenderer>>
+//
+template <typename... TargetT> Logger(TargetT...) -> Logger<TargetT...>;
 
 } // namespace logchain
