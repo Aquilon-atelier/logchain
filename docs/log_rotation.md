@@ -9,7 +9,7 @@ Rotation is enabled by default and can be configured through `FileSinkSettings`:
 FileSink sink(FileSinkSettings{
     .path = log_path,
     .max_files = 5,
-    .max_file_size = 10 * 1024 * 1024
+    .max_file_size = 10 * logchain::MiB   // 10 * 1024 * 1024
 });
 
 Logger logger(target(sink));

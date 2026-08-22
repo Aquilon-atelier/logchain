@@ -25,6 +25,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "size.hpp"
+
 namespace logchain {
 
 // ===========================================================================
@@ -92,7 +94,7 @@ struct FileSinkSettings {
     std::filesystem::path path;
     Rotation rotation = Rotation::enabled;
     std::size_t max_files = 5;
-    std::size_t max_file_size = 10 * 1024 * 1024;
+    std::size_t max_file_size = 10 * MiB;
 };
 
 namespace detail {
