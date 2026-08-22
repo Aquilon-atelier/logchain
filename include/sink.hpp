@@ -76,12 +76,21 @@ class ConsoleSink final : public Sink {
 //         ...
 //
 // Defaults:
+//   - rotation      = enabled
 //   - max_files     = 5
 //   - max_file_size = 10 MiB
+//
+// Rotation can be explicitly disabled with:
+//   FileSinkSettings{
+//       .path = "...",
+//       .rotation = Rotation::disabled
+//   }
 // ===========================================================================
 
+enum class Rotation { enabled, disabled };
 struct FileSinkSettings {
     std::filesystem::path path;
+    Rotation rotation = Rotation::enabled;
     std::size_t max_files = 5;
     std::size_t max_file_size = 10 * 1024 * 1024;
 };
@@ -172,8 +181,8 @@ class FileSink final : public Sink {
     // -----------------------------------------------------------------------
 
     explicit FileSink(FileSinkSettings settings)
-        : path_(std::move(settings.path)), max_files_(settings.max_files), max_file_size_(settings.max_file_size),
-          registry_key_(detail::reserve_file_sink_path(path_)) {
+        : path_(std::move(settings.path)), rotation_(settings.rotation), max_files_(settings.max_files),
+          max_file_size_(settings.max_file_size), registry_key_(detail::reserve_file_sink_path(path_)) {
         try {
             validate_settings();
             open_existing_file();
@@ -202,7 +211,7 @@ class FileSink final : public Sink {
         // Do not rotate an empty file just because a single log entry is
         // larger than max_file_size. The entry is written to the new/current
         // file and that file may therefore temporarily exceed the limit.
-        if (current_size_ > 0 && current_size_ + bytes > max_file_size_) {
+        if (rotation_ == Rotation::enabled && current_size_ > 0 && current_size_ + bytes > max_file_size_) {
             rotate();
         }
 
@@ -227,12 +236,14 @@ class FileSink final : public Sink {
             throw std::invalid_argument("FileSink: le chemin du fichier ne peut pas etre vide");
         }
 
-        if (max_files_ == 0) {
-            throw std::invalid_argument("FileSink: max_files doit etre superieur a zero");
-        }
+        if (rotation_ == Rotation::enabled) {
+            if (max_files_ == 0) {
+                throw std::invalid_argument("FileSink: max_files doit etre superieur a zero");
+            }
 
-        if (max_file_size_ == 0) {
-            throw std::invalid_argument("FileSink: max_file_size doit etre superieur a zero");
+            if (max_file_size_ == 0) {
+                throw std::invalid_argument("FileSink: max_file_size doit etre superieur a zero");
+            }
         }
     }
 
@@ -365,6 +376,7 @@ class FileSink final : public Sink {
 
     std::filesystem::path path_;
 
+    Rotation rotation_;
     std::size_t max_files_;
     std::size_t max_file_size_;
 
