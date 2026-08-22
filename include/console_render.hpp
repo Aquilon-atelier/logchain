@@ -204,7 +204,7 @@ inline void append_console_string(std::string &out, std::string_view value) {
 
 template <typename T> struct ConsoleMembersOf {
     static constexpr auto value =
-        std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::current()));
+        std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
 };
 
 template <typename T> void append_console_value(std::string &out, const T &value);

@@ -19,6 +19,12 @@
 
 using namespace logchain;
 
+struct User {
+    std::string firstname;
+    std::string lastname;
+    unsigned int age;
+};
+
 TEST(console_sink, mem_check) {
 
     std::string user{"bob"};
@@ -28,7 +34,7 @@ TEST(console_sink, mem_check) {
     // Basic contract: LOG captures names from the source text
     ConsoleSink console_sink;
     Logger logger(target(console_sink));
-    LOG(logger, LogLevel::info, "Request handled", user, request_id, retry_count);
+    LOG(logger, LogLevel::info, "Request handled", extra(user, request_id, retry_count));
     // Expected console output:
     // {"message":"Request handled","user":"bob","request_id":"req-A","retry_count":3}
 
@@ -64,8 +70,8 @@ TEST(file_sink, log) {
     {
         FileSink file_sink(log_path);
         Logger file_logger(target(file_sink));
-        LOG(file_logger, LogLevel::info, "requete traitee", user, request_id_a, retry_count);
-        LOG(file_logger, LogLevel::info, "requete traitee", user, request_id_b, 0);
+        LOG(file_logger, LogLevel::info, "requete traitee", extra(user, request_id_a, retry_count));
+        LOG(file_logger, LogLevel::info, "requete traitee", extra(user, request_id_b, 0));
     }
 
     std::ifstream in(log_path);
@@ -81,11 +87,24 @@ TEST(file_sink, log) {
 
 TEST(multiple_sink, explicit_target_decl) {
 
-    struct User {
-        std::string firstname;
-        std::string lastname;
-        unsigned int age;
-    };
+    namespace fs = std::filesystem;
+    const std::filesystem::path log_path{"/tmp/application.log"};
+
+    ConsoleSink console_sink;
+    FileSink file_sink{log_path};
+
+    Logger logger{Target{ConsoleRenderer{}, console_sink}, Target{JsonRenderer{}, file_sink}};
+
+    User albert_londre{"Albert", "Londre", 65};
+    User romain_garry{"Romain", "Garry", 53};
+
+    LOG(logger, LogLevel::info, "Request handled", extra(albert_londre, romain_garry));
+    fs::remove(log_path);
+}
+
+TEST(formatted, message) {
+
+    std::string request_status{"is successfully"};
 
     namespace fs = std::filesystem;
     const std::filesystem::path log_path{"/tmp/application.log"};
@@ -98,6 +117,6 @@ TEST(multiple_sink, explicit_target_decl) {
     User albert_londre{"Albert", "Londre", 65};
     User romain_garry{"Romain", "Garry", 53};
 
-    LOG(logger, LogLevel::info, "Request handled", albert_londre, romain_garry);
+    LOG_DEBUG(logger, "Request {} handled", request_status, extra(albert_londre, romain_garry));
     fs::remove(log_path);
 }

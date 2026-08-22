@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <string_view>
 
 namespace logchain {

@@ -42,23 +42,47 @@ template <typename... TargetT> class Logger {
   public:
     explicit Logger(TargetT... targets) : targets_(std::move(targets)...) {}
 
-    template <typename... Ts>
-    void log_named(LogLevel level, std::string_view message, detail::Named<Ts>... named_args) {
-
-        auto ctx = make_context(std::move(named_args)...);
-
-        LogEvent event{
-            .level = level,
-            .timestamp = std::chrono::system_clock::now(),
-            .message = message,
-        };
-
-        write(event, ctx);
+    template <typename... Args> void log(LogLevel level, std::string_view message, Args &&...args) {
+        if constexpr (sizeof...(Args) == 0) {
+            emit(level, std::string(message), make_context());
+        } else {
+            dispatch(level, message, std::forward<Args>(args)...);
+        }
     }
 
   private:
-    template <typename Event, typename NodeT> void write(const Event &event, const Context<NodeT> &context) {
+    template <typename... Args> void dispatch(LogLevel level, std::string_view message, Args &&...args) {
+        using LastT = std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>;
 
+        if constexpr (detail::is_extra_v<LastT>) {
+            dispatch_with_extra(level, message, std::make_index_sequence<sizeof...(Args) - 1>{},
+                                std::forward<Args>(args)...);
+        } else {
+            std::string formatted = std::vformat(message, std::make_format_args(args...));
+            emit(level, formatted, make_context());
+        }
+    }
+
+    template <std::size_t... Is, typename... Args>
+    void dispatch_with_extra(LogLevel level, std::string_view message, std::index_sequence<Is...>, Args &&...args) {
+        auto args_tuple = std::forward_as_tuple(args...); // args sont des lvalues ici
+        std::string formatted = std::vformat(message, std::make_format_args(std::get<Is>(args_tuple)...));
+
+        auto &&extra_obj = std::get<sizeof...(Args) - 1>(args_tuple);
+        auto ctx = make_context_from(extra_obj);
+        emit(level, formatted, ctx);
+    }
+
+    template <typename... Ts> static auto make_context_from(detail::Extra<Ts...> &e) {
+        return std::apply([](auto &...named) { return make_context(named...); }, e.items);
+    }
+
+    template <typename NodeT> void emit(LogLevel level, const std::string &message, const Context<NodeT> &ctx) {
+        LogEvent event{.level = level, .timestamp = std::chrono::system_clock::now(), .message = message};
+        write(event, ctx);
+    }
+
+    template <typename Event, typename NodeT> void write(const Event &event, const Context<NodeT> &context) {
         std::apply([&](auto &...target) { (target.write(event, context), ...); }, targets_);
     }
 

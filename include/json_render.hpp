@@ -136,7 +136,7 @@ namespace detail {
 // passing through a parameter.
 template <typename T> struct MembersOf {
     static constexpr auto value =
-        std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::current()));
+        std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
 };
 
 template <typename T, std::size_t I, std::size_t N> void append_members(const T &obj, std::string &out) {

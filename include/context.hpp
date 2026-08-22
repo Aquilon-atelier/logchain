@@ -88,6 +88,18 @@ template <typename T> Named<std::decay_t<T>> make_named(const char *name, T &&va
     return Named<std::decay_t<T>>{name, std::forward<T>(value)};
 }
 
+template <typename... Ts> struct Extra {
+    std::tuple<Named<Ts>...> items;
+};
+
+template <typename... Ts> constexpr auto make_extra(Named<Ts>... items) {
+    return Extra<Ts...>{std::tuple<Named<Ts>...>(std::move(items)...)};
+}
+
+template <typename T> struct is_extra : std::false_type {};
+template <typename... Ts> struct is_extra<Extra<Ts...>> : std::true_type {};
+template <typename T> inline constexpr bool is_extra_v = is_extra<std::remove_cvref_t<T>>::value;
+
 } // namespace detail
 
 template <typename NodeT> auto make_context_impl(Context<NodeT> ctx) { return ctx; }

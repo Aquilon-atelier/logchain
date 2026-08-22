@@ -41,6 +41,6 @@ int main() {
     std::string request_id{"req-A"};
     int retry_count{3};
 
-    LOG_INFO(logger, "Request handled", user, request_id, retry_count);
+    LOG_INFO(logger, "Request handled", extra(user, request_id, retry_count));
     fs::remove(log_path);
 }

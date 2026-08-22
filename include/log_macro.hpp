@@ -35,8 +35,11 @@ namespace logchain {
 
 #define SCL_NAMED_ARG(x) logchain::detail::make_named(#x, (x))
 
-#define LOG(logger, level, message, ...)                                                                               \
-    (logger).log_named((level), (message)__VA_OPT__(, SCL_FOR_EACH(SCL_NAMED_ARG, __VA_ARGS__)))
+// extra(...) : pure syntactic sugar, expands BEFORE LOG_xxx.
+// extra(user, request_id) -> make_extra(make_named("user", user), make_named("request_id", request_id))
+#define extra(...) ::logchain::detail::make_extra(SCL_FOR_EACH(SCL_NAMED_ARG, __VA_ARGS__))
+
+#define LOG(logger, level, message, ...) (logger).log((level), (message)__VA_OPT__(, __VA_ARGS__))
 
 #define LOG_TRACE(logger, message, ...) LOG(logger, ::logchain::LogLevel::trace, message __VA_OPT__(, ) __VA_ARGS__)
 

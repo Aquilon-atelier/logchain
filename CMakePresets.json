@@ -13,7 +13,7 @@
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_CXX_COMPILER": "/opt/gcc-16.1/bin/g++"
+                "CMAKE_CXX_COMPILER": "/opt/gcc-16.2/bin/g++"
             }
         },
         {
