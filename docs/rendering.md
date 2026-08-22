@@ -84,3 +84,4 @@ No change to the logging call is required.
 This separation allows the same structured event to be rendered differently depending on its destination.
 
 Previous step [Getting Started](getting_started.md)
+Next step [Log rotation](log_rotation.md)
