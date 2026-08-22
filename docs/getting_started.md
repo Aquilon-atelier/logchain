@@ -1,3 +1,7 @@
+Previous step [Index](index.md)  
+Next step : [Rendering](rendering.md)  
+  
+
 # Getting Started
 
 ## Compiler support

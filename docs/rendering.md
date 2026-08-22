@@ -1,3 +1,7 @@
+Previous step [Getting Started](getting_started.md)  
+Next step [Log rotation](log_rotation.md)  
+  
+
 # Rendering
 
 ## Overview

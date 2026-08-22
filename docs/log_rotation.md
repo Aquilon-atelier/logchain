@@ -1,3 +1,6 @@
+Previous step [Rendering](rendering.md)  
+  
+
 # Log Rotation
 
 ## Overview
