@@ -258,13 +258,18 @@ TEST_F(FileSinkTest, max_files_one_keeps_only_current_file) {
 
         Logger logger(target(sink));
 
-        LOG_INFO(logger, "first");
-        LOG_INFO(logger, "second");
-        LOG_INFO(logger, "third");
+        for (int i = 0; i < 10; ++i) {
+            LOG_INFO(logger, "message {}", i);
+        }
     }
 
     EXPECT_TRUE(fs::exists(log_path));
     EXPECT_FALSE(fs::exists(log_path.string() + ".1"));
+    EXPECT_FALSE(fs::exists(log_path.string() + ".2"));
+
+    const auto lines = read_lines(log_path);
+
+    ASSERT_FALSE(lines.empty());
 }
 
 // ===========================================================================
@@ -293,6 +298,13 @@ TEST_F(FileSinkTest, existing_file_size_is_accounted_for) {
 
     EXPECT_TRUE(fs::exists(log_path));
     EXPECT_TRUE(fs::exists(log_path.string() + ".1"));
+
+    EXPECT_EQ(read_file(log_path.string() + ".1"), "1234567890\n");
+
+    const auto current = read_lines(log_path);
+
+    ASSERT_EQ(current.size(), 1u);
+    EXPECT_NE(current[0].find("\"message\":\"abcdefghij\""), std::string::npos);
 }
 
 // ===========================================================================
@@ -317,6 +329,150 @@ TEST_F(FileSinkTest, message_larger_than_limit_is_written_without_empty_rotation
 
     ASSERT_EQ(lines.size(), 1u);
     EXPECT_NE(lines[0].find("this message is larger than ten bytes"), std::string::npos);
+}
+
+TEST_F(FileSinkTest, rotates_when_next_write_reaches_file_size_limit) {
+    const auto log_path = path("application.log");
+
+    // First determine the exact size of one serialized log entry.
+    {
+        FileSink sink(FileSinkSettings{.path = log_path, .max_files = 3, .max_file_size = 1024 * 1024});
+
+        Logger logger(target(sink));
+
+        LOG_INFO(logger, "first message");
+    }
+
+    const auto first_size = fs::file_size(log_path);
+    ASSERT_GT(first_size, 0u);
+
+    // Re-open the existing file with its exact size as the limit.
+    // The next write must therefore trigger rotation.
+    {
+        FileSink sink(FileSinkSettings{.path = log_path, .max_files = 3, .max_file_size = first_size});
+
+        Logger logger(target(sink));
+
+        LOG_INFO(logger, "second message");
+    }
+
+    EXPECT_TRUE(fs::exists(log_path));
+    EXPECT_TRUE(fs::exists(log_path.string() + ".1"));
+    EXPECT_FALSE(fs::exists(log_path.string() + ".2"));
+
+    // The rotated file must contain the first message.
+    const auto rotated = read_lines(log_path.string() + ".1");
+
+    ASSERT_EQ(rotated.size(), 1u);
+    EXPECT_NE(rotated[0].find("\"message\":\"first message\""), std::string::npos);
+
+    // The active file must contain the second message.
+    const auto current = read_lines(log_path);
+
+    ASSERT_EQ(current.size(), 1u);
+    EXPECT_NE(current[0].find("\"message\":\"second message\""), std::string::npos);
+}
+
+TEST_F(FileSinkTest, rotation_shifts_existing_archives_and_removes_oldest) {
+    const auto log_path = path("application.log");
+
+    // Create a complete set of existing files with distinguishable content.
+    {
+        std::ofstream out(log_path);
+        ASSERT_TRUE(out.is_open());
+        out << "current\n";
+    }
+
+    {
+        std::ofstream out(log_path.string() + ".1");
+        ASSERT_TRUE(out.is_open());
+        out << "archive 1\n";
+    }
+
+    {
+        std::ofstream out(log_path.string() + ".2");
+        ASSERT_TRUE(out.is_open());
+        out << "archive 2\n";
+    }
+
+    {
+        std::ofstream out(log_path.string() + ".3");
+        ASSERT_TRUE(out.is_open());
+        out << "archive 3\n";
+    }
+
+    {
+        FileSink sink(FileSinkSettings{.path = log_path, .max_files = 4, .max_file_size = 20});
+
+        Logger logger(target(sink));
+
+        LOG_INFO(logger, "new message");
+    }
+
+    EXPECT_TRUE(fs::exists(log_path));
+    EXPECT_TRUE(fs::exists(log_path.string() + ".1"));
+    EXPECT_TRUE(fs::exists(log_path.string() + ".2"));
+    EXPECT_TRUE(fs::exists(log_path.string() + ".3"));
+    EXPECT_FALSE(fs::exists(log_path.string() + ".4"));
+
+    EXPECT_EQ(read_file(log_path.string() + ".3"), "archive 2\n");
+    EXPECT_EQ(read_file(log_path.string() + ".2"), "archive 1\n");
+    EXPECT_EQ(read_file(log_path.string() + ".1"), "current\n");
+
+    const auto current = read_lines(log_path);
+
+    ASSERT_EQ(current.size(), 1u);
+    EXPECT_NE(current[0].find("\"message\":\"new message\""), std::string::npos);
+}
+
+// ===========================================================================
+// Rotation disabled
+// ===========================================================================
+
+TEST_F(FileSinkTest, disabled_rotation_never_creates_archives) {
+    const auto log_path = path("application.log");
+
+    {
+        FileSink sink(
+            FileSinkSettings{.path = log_path, .rotation = Rotation::disabled, .max_files = 3, .max_file_size = 20});
+
+        Logger logger(target(sink));
+
+        for (int i = 0; i < 10; ++i) {
+            LOG_INFO(logger, "message {}", i);
+        }
+    }
+
+    EXPECT_TRUE(fs::exists(log_path));
+    EXPECT_FALSE(fs::exists(log_path.string() + ".1"));
+    EXPECT_FALSE(fs::exists(log_path.string() + ".2"));
+    EXPECT_FALSE(fs::exists(log_path.string() + ".3"));
+
+    const auto lines = read_lines(log_path);
+
+    ASSERT_EQ(lines.size(), 10u);
+
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_NE(lines[static_cast<std::size_t>(i)].find("\"message\":\"message " + std::to_string(i) + "\""),
+                  std::string::npos);
+    }
+}
+
+// ===========================================================================
+// Filesystem errors
+// ===========================================================================
+
+TEST_F(FileSinkTest, file_creation_fails_when_parent_path_is_a_file) {
+    const auto parent = path("not_a_directory");
+    const auto log_path = parent / "application.log";
+
+    {
+        std::ofstream out(parent);
+        ASSERT_TRUE(out.is_open());
+        out << "this is a file, not a directory\n";
+    }
+
+    EXPECT_THROW({ FileSink sink(log_path); }, std::runtime_error);
 }
 
 } // namespace
