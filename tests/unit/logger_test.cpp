@@ -102,6 +102,26 @@ TEST(multiple_sink, explicit_target_decl) {
     fs::remove(log_path);
 }
 
+TEST(multiple_sink, explicit_api) {
+
+    namespace fs = std::filesystem;
+    const std::filesystem::path log_path{"/tmp/application.log"};
+
+    ConsoleSink console_sink;
+    FileSink file_sink{log_path};
+
+    Logger logger{Target{ConsoleRenderer{}, console_sink}, Target{JsonRenderer{}, file_sink}};
+
+    int handler{42};
+    User albert_londre{"Albert", "Londre", 65};
+    User romain_garry{"Romain", "Garry", 53};
+
+    logger.log(LogLevel::info, "request_handler {}", handler, named("Alber Londre", albert_londre),
+               named("Romain Garry", romain_garry));
+
+    fs::remove(log_path);
+}
+
 TEST(formatted, message) {
 
     std::string request_status{"is successfully"};
