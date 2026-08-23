@@ -1,5 +1,6 @@
 Previous step [Rendering](rendering.md)  
-  
+Next step [Log Level and Filtering](log_level_filtering.md)  
+
 
 # Log Rotation
 
@@ -161,4 +162,5 @@ Logger logger2(target(sink));
 The `FileSink` is then shared by both loggers, providing a single point of synchronization and rotation management.
 
 
-Previous step [Rendering](rendering.md)
+Previous step [Rendering](rendering.md)  
+Next step [Log Level and Filtering](log_level_filtering.md)  
