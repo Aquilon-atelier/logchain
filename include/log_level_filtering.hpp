@@ -1,26 +1,41 @@
-// log_level_filtering.hpp
+// Copyright (c) 2026 Sylvain Ladoux
 //
-// Implémentation de référence pour la spec "Filtrage de niveau de log et
-// dispatch précoce" (logchain).
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// Ce fichier est volontairement autonome et ne dépend pas du reste de
-// logchain : `log_unchecked()` est un stub minimal qui imprime le message.
-// Dans la vraie lib, `log_unchecked()` reste le pipeline existant
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+//
+// Reference implementation for the "Log level filtering and
+// early dispatch" spec (logchain).
+//
+// This file is intentionally self-contained and does not depend on the rest of
+// logchain: `log_unchecked()` is a minimal stub that prints the message.
+// In the actual library, `log_unchecked()` remains the existing pipeline
 // (dispatch -> named/extra -> vformat -> make_context -> emit -> Target)
-// et `Logger` devient `Logger<TargetT...>` sans que rien ici ne change —
-// LogProxy est déduit depuis le type englobant, pas depuis TargetT....
+// and `Logger` becomes `Logger<TargetT...>` without anything here changing—
+// LogProxy is deduced from the enclosing type, not from TargetT....
 //
-// Corrections intégrées par rapport au sketch initial de la spec :
-//   1. La macro LOG() ne capture l'expression `logger` qu'une seule fois
-//      (évite une double évaluation si l'appelant passe une expression
-//      avec effet de bord, ex: LOG(get_logger(), ...)).
-//   2. LogProxy::operator bool() est `explicit`.
-//   3. Logger::trace()/debug()/.../log() sont `[[nodiscard]]` pour éviter
-//      un `logger.debug();` silencieusement inutile.
-//   4. LogProxy::operator() forwarde parfaitement ses arguments.
-//   5. Durée de vie de LogProxy::logger_ documentée (référence, pas de
-//      stockage au-delà de l'expression `if`).
+// Corrections incorporated relative to the initial spec sketch:
+//   1. The LOG() macro captures the `logger` expression only once
+//      (avoids double evaluation if the caller passes an expression
+//      with side effects, e.g., LOG(get_logger(), ...)).
+//   2. LogProxy::operator bool() is `explicit`.
+//   3. Logger::trace()/debug()/.../log() are `[[nodiscard]]` to avoid
+//      a silently useless `logger.debug();` call.
+//   4. LogProxy::operator() perfectly forwards its arguments.
+//   5. LogProxy::logger_ lifetime documented (reference, no
+//      storage beyond the `if` expression).
 //
+
 #pragma once
 
 #include <atomic>
@@ -35,26 +50,26 @@ namespace logchain {
 // ---------------------------------------------------------------------
 // LogProxy<Level, LoggerT>
 //
-// Ne possède pas le logger : `logger_` est une référence. Le proxy est
-// pensé pour un usage immédiat et transitoire :
+// Does not own the logger: `logger_` is a reference. The proxy is
+// designed for immediate, transient use:
 //
 //     if (auto log = logger.debug())
 //         log("...", ...);
 //
-// Ne pas le stocker au-delà de la portée dans laquelle `logger` est
-// valide (même contrainte qu'un std::string_view vis-à-vis de son
+// Do not store it beyond the scope in which `logger` is
+// valid (same constraint as `std::string_view` regarding its
 // buffer).
 // ---------------------------------------------------------------------
 template <LogLevel Level, typename LoggerT> class LogProxy {
   public:
     explicit LogProxy(LoggerT &logger) noexcept : logger_(logger) {}
 
-    // Un seul load atomique (relaxed, via is_enabled()).
+    // A single atomic load (relaxed, via is_enabled()).
     [[nodiscard]] explicit operator bool() const noexcept { return logger_.is_enabled(Level); }
 
-    // N'est censé être appelé que si operator bool() vient de renvoyer
-    // true — aucun test de niveau ici, c'est log_unchecked() en aval qui
-    // en dépend implicitement.
+    // Should only be called if operator bool() has just returned
+    // true — no level check here; it is log_unchecked() further down the
+    // line that implicitly relies on this.
     template <typename... Args> void operator()(Args &&...args) {
         logger_.log_unchecked(Level, std::forward<Args>(args)...);
     }
@@ -63,11 +78,6 @@ template <LogLevel Level, typename LoggerT> class LogProxy {
     LoggerT &logger_;
 };
 
-// ---------------------------------------------------------------------
-// Logger — squelette minimal pour la démo. Dans la vraie lib, c'est
-// Logger<TargetT...> ; seuls minimum_level_/is_enabled/log/log_unchecked
-// et les accesseurs trace()/debug()/... nous intéressent ici.
-// ---------------------------------------------------------------------
 class Logger {
   public:
     Logger() noexcept : minimum_level_(LogLevel::trace) {}
@@ -80,17 +90,17 @@ class Logger {
         return level >= minimum_level_.load(std::memory_order_relaxed);
     }
 
-    // API générique : garde interne obligatoire. Ne peut pas empêcher
-    // l'évaluation préalable des arguments par l'appelant (limitation du
-    // C++, pas de l'implémentation).
+    // Generic API: internal guard required. Cannot prevent
+    // the caller from evaluating arguments beforehand (a C++
+    // limitation, not an implementation one).
     template <typename... Args> void log(LogLevel level, Args &&...args) {
         if (is_enabled(level)) {
             log_unchecked(level, std::forward<Args>(args)...);
         }
     }
 
-    // Primitive interne : suppose is_enabled(level) déjà vrai, ne
-    // refait jamais le test.
+    // Internal primitive: assumes is_enabled(level) is already true;
+    // never re-runs the test.
     template <typename... Args> void log_unchecked(LogLevel level, const std::string &message, Args &&.../*args*/) {
 
         const auto level_name = to_string(level);
@@ -124,13 +134,13 @@ class Logger {
 // ---------------------------------------------------------------------
 // Macros
 //
-// LOGCHAIN_LOG capture `logger_expr` une seule fois dans une variable
-// locale (do/while(0) + auto&&), donc sûre même si l'expression a un
-// effet de bord (ex: LOGCHAIN_LOG(get_logger(), ...)).
+// LOGCHAIN_LOG captures `logger_expr` exactly once in a local variable
+// (using do/while(0) + auto&&), making it safe even if the expression
+// has side effects (e.g., LOGCHAIN_LOG(get_logger(), ...)).
 //
-// Les macros courtes (LOG, LOG_DEBUG, ...) sont fournies par défaut mais
-// désactivables via LOGCHAIN_NO_SHORT_MACROS si elles entrent en
-// collision avec une autre lib (glog, Abseil, ...).
+// Short macros (LOG, LOG_DEBUG, ...) are provided by default but can be
+// disabled via LOGCHAIN_NO_SHORT_MACROS if they conflict with another
+// library (glog, Abseil, ...).
 // ---------------------------------------------------------------------
 #define LOGCHAIN_LOG(logger_expr, level, ...)                                                                          \
     do {                                                                                                               \
