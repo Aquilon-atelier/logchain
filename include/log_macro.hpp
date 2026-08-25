@@ -39,18 +39,17 @@ namespace logchain {
 // extra(user, request_id) -> make_extra(make_named("user", user), make_named("request_id", request_id))
 #define extra(...) ::logchain::detail::make_extra(SCL_FOR_EACH(SCL_NAMED_ARG, __VA_ARGS__))
 
-#define LOG(logger, level, message, ...) (logger).log((level), (message)__VA_OPT__(, __VA_ARGS__))
-
-#define LOG_TRACE(logger, message, ...) LOG(logger, ::logchain::LogLevel::trace, message __VA_OPT__(, ) __VA_ARGS__)
-
-#define LOG_DEBUG(logger, message, ...) LOG(logger, ::logchain::LogLevel::debug, message __VA_OPT__(, ) __VA_ARGS__)
-
-#define LOG_INFO(logger, message, ...) LOG(logger, ::logchain::LogLevel::info, message __VA_OPT__(, ) __VA_ARGS__)
-
-#define LOG_WARN(logger, message, ...) LOG(logger, ::logchain::LogLevel::warning, message __VA_OPT__(, ) __VA_ARGS__)
-
-#define LOG_ERROR(logger, message, ...) LOG(logger, ::logchain::LogLevel::error, message __VA_OPT__(, ) __VA_ARGS__)
-
-#define LOG_FATAL(logger, message, ...) LOG(logger, ::logchain::LogLevel::fatal, message __VA_OPT__(, ) __VA_ARGS__)
+// LOG / LOG_TRACE / LOG_DEBUG / LOG_INFO / LOG_WARN / LOG_ERROR / LOG_FATAL
+// used to be defined here as thin, unconditional wrappers around
+// `(logger).log(...)`. They now live in log_level_filtering.hpp instead
+// (LOGCHAIN_LOG* and their short aliases), which checks is_enabled()
+// *before* the variadic message/args are ever evaluated — a property a
+// plain macro-to-member-function forward like the old LOG(...) here
+// could never have, since C++ always evaluates function-call arguments
+// eagerly regardless of what the callee does internally. Keeping both
+// definitions around is not just redundant: they use the SAME macro
+// names with DIFFERENT parameter lists, which is an outright macro
+// redefinition the moment both headers are included together — not a
+// style choice to leave open.
 
 } // namespace logchain

@@ -1,6 +1,18 @@
 // tests/unit/log_level_filtering_test.cpp
+//
+// Tests filtering mechanics (is_enabled / set_minimum_level / log /
+// log_unchecked / LogProxy / LOGCHAIN_LOG* macros) directly on the real
+// Logger<TargetT...> from logger.hpp.
+//
+// TestLogger = Logger<> (zero targets) rather than a hand-rolled
+// standalone stand-in: it runs the actual shipped dispatch pipeline
+// (log -> is_enabled -> log_unchecked -> dispatch -> ... -> emit ->
+// buffering policy -> targets), just with an empty target tuple, so the
+// final std::apply fold over targets does nothing. This means these
+// tests exercise the real filtering code path end to end, not a
+// parallel implementation that could silently drift from it.
 
-#include "log_level_filtering.hpp"
+#include "logger.hpp"
 
 #include <gtest/gtest.h>
 
@@ -12,6 +24,8 @@ using logchain::LogLevel;
 
 namespace {
 
+using TestLogger = Logger<>;
+
 int g_expensive_calls = 0;
 int g_logger_expression_calls = 0;
 
@@ -20,10 +34,10 @@ std::string expensive() {
     return "computed-value";
 }
 
-Logger &get_logger() {
+TestLogger &get_logger() {
     ++g_logger_expression_calls;
 
-    static Logger logger;
+    static TestLogger logger;
     return logger;
 }
 
@@ -69,13 +83,13 @@ TEST(LogLevelTest, EnumValuesAreOrdered) {
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, DefaultMinimumLevelIsTrace) {
-    Logger logger;
+    TestLogger logger;
 
     EXPECT_EQ(logger.minimum_level(), LogLevel::trace);
 }
 
 TEST_F(LogLevelFilteringTest, DefaultMinimumLevelEnablesEveryLevel) {
-    Logger logger;
+    TestLogger logger;
 
     EXPECT_TRUE(logger.is_enabled(LogLevel::trace));
     EXPECT_TRUE(logger.is_enabled(LogLevel::debug));
@@ -90,7 +104,7 @@ TEST_F(LogLevelFilteringTest, DefaultMinimumLevelEnablesEveryLevel) {
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, MinimumLevelFiltersAllLowerLevels) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -104,7 +118,7 @@ TEST_F(LogLevelFilteringTest, MinimumLevelFiltersAllLowerLevels) {
 }
 
 TEST_F(LogLevelFilteringTest, MinimumLevelItselfIsEnabled) {
-    Logger logger;
+    TestLogger logger;
 
     const LogLevel levels[] = {
         LogLevel::trace, LogLevel::debug, LogLevel::info, LogLevel::warning, LogLevel::error, LogLevel::fatal,
@@ -118,7 +132,7 @@ TEST_F(LogLevelFilteringTest, MinimumLevelItselfIsEnabled) {
 }
 
 TEST_F(LogLevelFilteringTest, FatalOnlyEnablesFatal) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::fatal);
 
@@ -141,7 +155,7 @@ TEST_F(LogLevelFilteringTest, FatalOnlyEnablesFatal) {
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, DisabledMacroDoesNotEvaluateArguments) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -151,7 +165,7 @@ TEST_F(LogLevelFilteringTest, DisabledMacroDoesNotEvaluateArguments) {
 }
 
 TEST_F(LogLevelFilteringTest, EnabledMacroEvaluatesArguments) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -161,12 +175,7 @@ TEST_F(LogLevelFilteringTest, EnabledMacroEvaluatesArguments) {
 }
 
 TEST_F(LogLevelFilteringTest, DisabledMacroDoesNotInvokeUncheckedPipeline) {
-    // With the current reference implementation this is indirectly verified
-    // by the fact that the argument is not evaluated.
-    //
-    // Once Logger gets an injectable target/spy, this test should additionally
-    // verify that the target pipeline is never entered.
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::error);
 
@@ -176,12 +185,14 @@ TEST_F(LogLevelFilteringTest, DisabledMacroDoesNotInvokeUncheckedPipeline) {
 }
 
 TEST_F(LogLevelFilteringTest, EnabledMacroInvokesUncheckedPipeline) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
-    // log_unchecked() currently prints to stdout. The observable contract
-    // here is that the call is reached when the level is enabled.
+    // The real dispatch pipeline is entered (dispatch -> ... -> emit ->
+    // buffering policy -> targets); with zero targets, the final fold
+    // over the target tuple is a no-op, so there is nothing further to
+    // observe here beyond "the call is reached without failing."
     LOG_WARN(logger, "warning");
 
     SUCCEED();
@@ -192,7 +203,7 @@ TEST_F(LogLevelFilteringTest, EnabledMacroInvokesUncheckedPipeline) {
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, DynamicMacroFiltersDisabledLevel) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -204,7 +215,7 @@ TEST_F(LogLevelFilteringTest, DynamicMacroFiltersDisabledLevel) {
 }
 
 TEST_F(LogLevelFilteringTest, DynamicMacroEvaluatesArgumentsForEnabledLevel) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -228,7 +239,7 @@ TEST_F(LogLevelFilteringTest, LoggerExpressionIsEvaluatedExactlyOnce) {
 }
 
 TEST_F(LogLevelFilteringTest, DisabledMacroStillEvaluatesLoggerExpressionExactlyOnce) {
-    Logger &logger = get_logger();
+    TestLogger &logger = get_logger();
     logger.set_minimum_level(LogLevel::error);
 
     g_logger_expression_calls = 0;
@@ -241,7 +252,7 @@ TEST_F(LogLevelFilteringTest, DisabledMacroStillEvaluatesLoggerExpressionExactly
 }
 
 TEST_F(LogLevelFilteringTest, DynamicMacroEvaluatesLoggerExpressionExactlyOnce) {
-    Logger &logger = get_logger();
+    TestLogger &logger = get_logger();
     logger.set_minimum_level(LogLevel::warning);
 
     g_logger_expression_calls = 0;
@@ -262,7 +273,7 @@ TEST_F(LogLevelFilteringTest, DynamicMacroEvaluatesLoggerExpressionExactlyOnce) 
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, DisabledDebugProxyDoesNotEvaluateArguments) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -274,7 +285,7 @@ TEST_F(LogLevelFilteringTest, DisabledDebugProxyDoesNotEvaluateArguments) {
 }
 
 TEST_F(LogLevelFilteringTest, EnabledDebugProxyEvaluatesArguments) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::debug);
 
@@ -286,7 +297,7 @@ TEST_F(LogLevelFilteringTest, EnabledDebugProxyEvaluatesArguments) {
 }
 
 TEST_F(LogLevelFilteringTest, ProxyMatchesIsEnabled) {
-    Logger logger;
+    TestLogger logger;
 
     const LogLevel levels[] = {
         LogLevel::trace, LogLevel::debug, LogLevel::info, LogLevel::warning, LogLevel::error, LogLevel::fatal,
@@ -319,7 +330,7 @@ TEST_F(LogLevelFilteringTest, ProxyMatchesIsEnabled) {
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, GenericLogCannotPreventArgumentEvaluation) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -329,7 +340,7 @@ TEST_F(LogLevelFilteringTest, GenericLogCannotPreventArgumentEvaluation) {
 }
 
 TEST_F(LogLevelFilteringTest, GenericLogStillFiltersDisabledLevel) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -339,7 +350,7 @@ TEST_F(LogLevelFilteringTest, GenericLogStillFiltersDisabledLevel) {
 }
 
 TEST_F(LogLevelFilteringTest, GenericLogEvaluatesEnabledArgumentOnce) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::warning);
 
@@ -353,7 +364,7 @@ TEST_F(LogLevelFilteringTest, GenericLogEvaluatesEnabledArgumentOnce) {
 // ============================================================================
 
 TEST_F(LogLevelFilteringTest, MinimumLevelCanBeChangedRepeatedly) {
-    Logger logger;
+    TestLogger logger;
 
     logger.set_minimum_level(LogLevel::fatal);
     EXPECT_EQ(logger.minimum_level(), LogLevel::fatal);

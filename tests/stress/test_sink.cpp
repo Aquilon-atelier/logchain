@@ -42,8 +42,8 @@ int main() {
 
         std::string user{"bob"};
         int retry_count{3};
-        LOG(file_logger, LogLevel::info, "premiere ligne", user);
-        LOG(file_logger, LogLevel::info, "deuxieme ligne", retry_count);
+        LOG(file_logger, LogLevel::info, "premiere ligne", extra(user));
+        LOG(file_logger, LogLevel::info, "deuxieme ligne", extra(retry_count));
     }
     {
         std::ifstream in(log_path);
@@ -77,7 +77,7 @@ int main() {
             threads.emplace_back([&shared_sink, t] {
                 Logger logger(target(shared_sink)); // one Logger per thread, a single Sink
                 for (int i = 0; i < kLogsPerThread; ++i) {
-                    LOG(logger, LogLevel::info, "thread-message", t, i);
+                    LOG(logger, LogLevel::info, "thread-message", extra(t, i));
                 }
             });
         }
