@@ -25,6 +25,7 @@
 
 #include <chrono>
 #include <concepts>
+#include <format>
 #include <tuple>
 #include <utility>
 
@@ -72,6 +73,72 @@ template <typename FirstT, typename... RestT> struct named_suffix_count<FirstT, 
 };
 
 template <typename... Args> inline constexpr std::size_t named_count_v = named_suffix_count<Args...>::value;
+
+// ===========================================================================
+// log_format_string
+//
+// Builds the std::format_string type for the actual formatting arguments.
+//
+// The complete Logger argument pack may contain a trailing Extra<Ts...> or
+// a trailing sequence of Named<T>. Those arguments belong to the logging
+// context and are therefore excluded from the format string's type list.
+//
+// This allows the format string itself to be checked at compile time:
+//
+//   log(info, "hello {}", value)              -> format_string<value>
+//   log(info, "hello", extra(value))          -> format_string<>
+//   log(info, "hello {}", value, extra(x))    -> format_string<value>
+//   log(info, "hello {}", value, named(...))  -> format_string<value>
+// ===========================================================================
+
+template <std::size_t N, typename Tuple> struct tuple_take;
+
+template <std::size_t N, typename... Ts> struct tuple_take<N, std::tuple<Ts...>> {
+  private:
+    template <std::size_t... Is>
+    static auto make(std::index_sequence<Is...>) -> std::tuple<std::tuple_element_t<Is, std::tuple<Ts...>>...>;
+
+  public:
+    using type = decltype(make(std::make_index_sequence<N>{}));
+};
+
+template <typename Tuple> struct tuple_drop_last;
+
+template <typename... Ts> struct tuple_drop_last<std::tuple<Ts...>> {
+    static_assert(sizeof...(Ts) > 0);
+    using type = typename tuple_take<sizeof...(Ts) - 1, std::tuple<Ts...>>::type;
+};
+
+template <typename Tuple> struct format_string_from_tuple;
+
+template <typename... Ts> struct format_string_from_tuple<std::tuple<Ts...>> {
+    using type = std::format_string<Ts...>;
+};
+
+template <typename Tuple, bool Empty> struct log_format_string_impl;
+
+template <typename Tuple> struct log_format_string_impl<Tuple, true> {
+    using type = std::format_string<>;
+};
+
+template <typename... Args> struct log_format_string_impl<std::tuple<Args...>, false> {
+  private:
+    using args_tuple = std::tuple<Args...>;
+
+    static constexpr std::size_t count = sizeof...(Args);
+    using last_type = std::tuple_element_t<count - 1, args_tuple>;
+
+    static constexpr std::size_t named_count = named_suffix_count<Args...>::value;
+
+    using format_args_tuple = std::conditional_t<is_extra_v<last_type>, typename tuple_drop_last<args_tuple>::type,
+                                                 typename tuple_take<count - named_count, args_tuple>::type>;
+
+  public:
+    using type = typename format_string_from_tuple<format_args_tuple>::type;
+};
+
+template <typename... Args>
+using log_format_string_t = typename log_format_string_impl<std::tuple<Args...>, sizeof...(Args) == 0>::type;
 
 } // namespace detail
 
@@ -139,9 +206,17 @@ template <typename... TargetT> class Logger {
         }
     }
 
-    template <typename... Args> void log(LogLevel level, std::string_view message, Args &&...args) {
+    template <typename Message>
+        requires std::convertible_to<Message, std::string_view>
+    void log(LogLevel level, Message &&message) {
         if (is_enabled(level)) {
-            log_unchecked(level, message, std::forward<Args>(args)...);
+            log_unchecked(level, std::string_view(std::forward<Message>(message)));
+        }
+    }
+
+    template <typename... Args> void log(LogLevel level, detail::log_format_string_t<Args...> message, Args &&...args) {
+        if (is_enabled(level)) {
+            log_unchecked(level, message.get(), std::forward<Args>(args)...);
         }
     }
 
@@ -296,9 +371,9 @@ template <typename... TargetT> class Logger {
         return std::apply([](auto &...named) { return make_context(named...); }, e.items);
     }
 
-    // NOTE: 'Event' was previously an unused template parameter here — it
-    // never appeared in the function's parameter list, so it could never be
-    // deduced from a call site ("couldn't deduce template parameter Event").
+    // NOTE: 'Event' was previously an unused template parameter here —
+    // it never appeared in the function's parameter list, so it could never
+    // be deduced from a call site ("couldn't deduce template parameter Event").
     // LogEvent is constructed directly in the body, so only NodeT is needed.
     //
     // BUFFERING CHANGE: `message` is now taken by rvalue reference rather
@@ -397,8 +472,8 @@ template <typename... TargetT> class Logger {
     // flush_buffer(): prefix-commit semantics.
     //
     // Events are emitted one at a time, in order. Each event is only
-    // removed from the buffer — and its accounting released — after its
-    // own emission has succeeded. If the pipeline throws partway
+    // removed from the buffer — and its accounting released — after
+    // its own emission has succeeded. If the pipeline throws partway
     // through, the events already emitted are gone (never re-emitted);
     // the remaining ones stay buffered and the exception propagates to
     // the caller (explicit flush(), or a capacity-triggered flush
@@ -430,13 +505,13 @@ template <typename... TargetT> class Logger {
     // path. Lazily purges stale entries from OTHER, now-destroyed
     // loggers — but only when a new entry is actually being inserted
     // (amortized over insertions, never on every call to an
-    // already-registered logger's entry), keeping the purge off the hot
-    // path for the common case of a small, stable set of loggers used
-    // repeatedly by a thread.
+    // already-registered logger's entry), keeping the purge off the
+    // hot path for the common case of a small, stable set of loggers
+    // used repeatedly by a thread.
     //
     // find_thread_local_entry(): non-creating, used by flush() and
-    // ~Logger() — neither should conjure a buffer into existence for a
-    // thread that never logged anything through this logger.
+    // ~Logger() — neither should conjure a buffer into existence for
+    // a thread that never logged anything through this logger.
     // ---------------------------------------------------------------
     ThreadLocalBuffer<TargetT...> &thread_local_entry() {
         auto [it, inserted] = t_buffers_.try_emplace(state_->id);

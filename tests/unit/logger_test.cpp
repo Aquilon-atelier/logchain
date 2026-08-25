@@ -184,3 +184,47 @@ TEST(scope, proc_diffname) {
     locals_1();
     locals_2_renamed();
 }
+
+TEST(LoggerTest, FormatArgumentsAreAccepted) {
+    FileSink sink("format_test.log");
+    Logger logger(target(sink));
+
+    const std::string user{"bob"};
+    const int retry_count{3};
+
+    EXPECT_NO_THROW({
+        logger.log(LogLevel::info, "hello");
+        logger.log(LogLevel::info, "hello {}", user);
+        logger.log(LogLevel::info, "hello {} {}", user, retry_count);
+    });
+}
+
+TEST(LoggerTest, ExtraIsNotAFormatArgument) {
+    FileSink sink("format_test.log");
+    Logger logger(target(sink));
+
+    const std::string user{"bob"};
+    const int retry_count{3};
+
+    EXPECT_NO_THROW({
+        logger.log(LogLevel::info, "hello", extra(user));
+        logger.log(LogLevel::info, "hello {}", user, extra(retry_count));
+        logger.log(LogLevel::info, "hello {} {}", user, retry_count, extra(user));
+    });
+}
+
+TEST(LoggerTest, NamedSuffixIsNotAFormatArgument) {
+    FileSink sink("format_test.log");
+    Logger logger(target(sink));
+
+    const std::string user{"bob"};
+    const int retry_count{3};
+
+    EXPECT_NO_THROW({
+        logger.log(LogLevel::info, "hello", named("user", user));
+
+        logger.log(LogLevel::info, "hello {}", user, named("retry_count", retry_count));
+
+        logger.log(LogLevel::info, "hello {} {}", user, retry_count, named("user", user));
+    });
+}
