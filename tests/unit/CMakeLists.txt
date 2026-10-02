@@ -32,6 +32,7 @@
 add_executable(${PROJECT_NAME}_unit_tests
     logger_test.cpp
     file_sink_test.cpp
+    log_level_filtering_test.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_unit_tests
