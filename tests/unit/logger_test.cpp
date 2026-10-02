@@ -120,3 +120,47 @@ TEST(formatted, message) {
     LOG_DEBUG(logger, "Request {} handled", request_status, extra(albert_londre, romain_garry));
     fs::remove(log_path);
 }
+
+void locals_1() {
+    struct LocalUser {
+        std::string firstname;
+        std::string lastname;
+        unsigned int age;
+    };
+    std::string request_status{"is successfully"};
+
+    ConsoleSink console_sink;
+    Logger logger(target(console_sink));
+
+    LocalUser albert_londre{"Albert", "Londre", 65};
+    LocalUser romain_garry{"Romain", "Garry", 53};
+
+    LOG_WARN(logger, "Request {} handled", request_status, extra(albert_londre, romain_garry));
+}
+
+TEST(scope, proc) {
+    // One single logger in a local scope
+    locals_1();
+}
+
+void locals_2_renamed() {
+    struct LocalUserBis { // different name, identical fields
+        std::string firstname;
+        std::string lastname;
+        unsigned int age;
+    };
+
+    std::string request_status{"is successfully"};
+
+    ConsoleSink console_sink;
+    Logger logger(target(console_sink));
+
+    LocalUserBis albert_londre{"Albert", "Londre", 65};
+    LocalUserBis romain_garry{"Romain", "Garry", 53};
+    LOG_WARN(logger, "Request {} handled", request_status, extra(albert_londre, romain_garry));
+}
+
+TEST(scope, proc_diffname) {
+    locals_1();
+    locals_2_renamed();
+}
