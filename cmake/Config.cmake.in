@@ -1,0 +1,12 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Mirror here every find_package() call from cmake/Dependencies.cmake, so
+# that a consumer's find_package(@PROJECT_NAME@) also resolves our own
+# dependencies transitively, e.g.:
+# find_dependency(fmt)
+
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@Targets.cmake")
+
+check_required_components(@PROJECT_NAME@)
