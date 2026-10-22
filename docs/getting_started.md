@@ -111,7 +111,7 @@ cmake --install build
 The following example creates a logger with both a console and a file sink:
 
 ```cpp
-#include "logger.hpp"
+#include "logchain/logger.hpp"
 
 #include <filesystem>
 #include <string>

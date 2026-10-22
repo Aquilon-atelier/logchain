@@ -28,7 +28,7 @@
 #include <string>
 #include <utility>
 
-#include "log_level.hpp"
+#include <logchain/log_level.hpp>
 
 namespace logchain {
 

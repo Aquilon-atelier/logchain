@@ -18,7 +18,7 @@
 #include <chrono>
 #include <string_view>
 
-#include "log_level.hpp"
+#include <logchain/log_level.hpp>
 namespace logchain {
 
 struct LogEvent {

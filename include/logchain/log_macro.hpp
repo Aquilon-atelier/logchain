@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "context.hpp"
+#include <logchain/context.hpp>
 
 namespace logchain {
 

@@ -1,6 +1,6 @@
 // tests/unit/log_level_filtering_test.cpp
 
-#include "log_level_filtering.hpp"
+#include "logchain/log_level_filtering.hpp"
 
 #include <gtest/gtest.h>
 

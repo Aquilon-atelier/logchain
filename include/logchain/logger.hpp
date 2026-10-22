@@ -15,10 +15,10 @@
 
 #pragma once
 
-#include "context.hpp"
-#include "event.hpp"
-#include "log_macro.hpp"
-#include "target.hpp"
+#include <logchain/context.hpp>
+#include <logchain/event.hpp>
+#include <logchain/log_macro.hpp>
+#include <logchain/target.hpp>
 
 #include <chrono>
 #include <concepts>
