@@ -15,43 +15,26 @@
 
 #pragma once
 
-#include "context.hpp"
-#include "event.hpp"
-#include "log_macro.hpp"
-#include "target.hpp"
+#include <logchain/context.hpp>
+#include <logchain/event.hpp>
+#include <logchain/log_level.hpp>
+#include <logchain/log_macro.hpp>
+#include <logchain/log_proxy.hpp>
+#include <logchain/target.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <concepts>
+#include <cstddef>
+#include <format>
+#include <string>
+#include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 namespace logchain {
 
-// ===========================================================================
-// named_suffix_count
-//
-// Number of trailing Named<T> arguments.
-//
-// Examples:
-//
-//   int
-//       -> 0
-//
-//   int, Named<A>
-//       -> 1
-//
-//   int, Named<A>, Named<B>
-//       -> 2
-//
-// Named arguments are therefore required to form a suffix.
-//
-// NOTE: this must live at namespace scope, not as a member of Logger.
-// A member template of a class template cannot be explicitly or partially
-// specialized while still nested inside its enclosing class template —
-// GCC rejects it with "explicit specialization in non-namespace scope".
-// Since named_suffix_count never actually depends on Logger's TargetT...
-// pack, hoisting it out here is free.
-// ===========================================================================
 namespace detail {
 
 template <typename... Ts> struct named_suffix_count;
@@ -76,18 +59,40 @@ template <typename... Args> inline constexpr std::size_t named_count_v = named_s
 // Logger
 //
 // Rendering is statically dispatched through Target<RendererT>.
+// The only runtime polymorphic call in the pipeline is Sink::write().
 //
-// The only runtime polymorphic call in the complete pipeline is:
-//     Sink::write(std::string_view)
-//
-// Logger itself does not perform virtual dispatch.
+// Level filtering: is_enabled() is a single relaxed atomic load.
+// log() checks the level; log_unchecked() assumes it was already checked
+// (used by LogProxy and by the LOG macros).
 // ===========================================================================
 
 template <typename... TargetT> class Logger {
   public:
     explicit Logger(TargetT... targets) : targets_(std::move(targets)...) {}
 
+    // std::atomic makes Logger non-copyable and non-movable.
+    Logger(const Logger &) = delete;
+    Logger &operator=(const Logger &) = delete;
+
+    // --- Level filtering ----------------------------------------------------
+
+    void set_minimum_level(LogLevel level) noexcept { minimum_level_.store(level, std::memory_order_relaxed); }
+
+    [[nodiscard]] LogLevel minimum_level() const noexcept { return minimum_level_.load(std::memory_order_relaxed); }
+
+    [[nodiscard]] bool is_enabled(LogLevel level) const noexcept { return level >= minimum_level(); }
+
+    // Generic API with an internal level guard. Cannot prevent the caller
+    // from evaluating its arguments (use the macros or the proxies for that).
     template <typename... Args> void log(LogLevel level, std::string_view message, Args &&...args) {
+        if (is_enabled(level)) {
+            log_unchecked(level, message, std::forward<Args>(args)...);
+        }
+    }
+
+    // Internal primitive: assumes is_enabled(level) is already true.
+    // Public because it is called by LogProxy and by the macros.
+    template <typename... Args> void log_unchecked(LogLevel level, std::string_view message, Args &&...args) {
         if constexpr (sizeof...(Args) == 0) {
             emit(level, std::string(message), make_context());
         } else {
@@ -95,9 +100,26 @@ template <typename... TargetT> class Logger {
         }
     }
 
+    // --- Per-level accessors: if (auto log = logger.debug()) log(...); ------
+
+    [[nodiscard]] LogProxy<LogLevel::trace, Logger> trace() noexcept {
+        return LogProxy<LogLevel::trace, Logger>(*this);
+    }
+    [[nodiscard]] LogProxy<LogLevel::debug, Logger> debug() noexcept {
+        return LogProxy<LogLevel::debug, Logger>(*this);
+    }
+    [[nodiscard]] LogProxy<LogLevel::info, Logger> info() noexcept { return LogProxy<LogLevel::info, Logger>(*this); }
+    [[nodiscard]] LogProxy<LogLevel::warning, Logger> warning() noexcept {
+        return LogProxy<LogLevel::warning, Logger>(*this);
+    }
+    [[nodiscard]] LogProxy<LogLevel::error, Logger> error() noexcept {
+        return LogProxy<LogLevel::error, Logger>(*this);
+    }
+    [[nodiscard]] LogProxy<LogLevel::fatal, Logger> fatal() noexcept {
+        return LogProxy<LogLevel::fatal, Logger>(*this);
+    }
+
   private:
-    // Thin alias so the rest of the class can keep writing named_count_v<Args...>
-    // unchanged; the actual metafunction now lives in logchain::detail above.
     template <typename... Args> static constexpr std::size_t named_count_v = detail::named_count_v<Args...>;
 
     // -----------------------------------------------------------------------
@@ -120,7 +142,7 @@ template <typename... TargetT> class Logger {
     }
 
     // -----------------------------------------------------------------------
-    // Existing extra(...) path.
+    // extra(...) path.
     // -----------------------------------------------------------------------
 
     template <std::size_t... Is, typename... Args>
@@ -139,17 +161,6 @@ template <typename... TargetT> class Logger {
 
     // -----------------------------------------------------------------------
     // Explicit named(...) path.
-    //
-    // Example:
-    //
-    //   log(level,
-    //       "request_handler {}",
-    //       handler,
-    //       named("Albert Londre", albert_londre),
-    //       named("Romain Garry", romain_garry));
-    //
-    // The format arguments are the prefix and the Named<T> arguments form
-    // the context suffix.
     // -----------------------------------------------------------------------
 
     template <typename... Args> void dispatch_with_named(LogLevel level, std::string_view message, Args &&...args) {
@@ -185,10 +196,6 @@ template <typename... TargetT> class Logger {
         return std::apply([](auto &...named) { return make_context(named...); }, e.items);
     }
 
-    // NOTE: 'Event' was previously an unused template parameter here — it
-    // never appeared in the function's parameter list, so it could never be
-    // deduced from a call site ("couldn't deduce template parameter Event").
-    // LogEvent is constructed directly in the body, so only NodeT is needed.
     template <typename NodeT> void emit(LogLevel level, const std::string &message, const Context<NodeT> &ctx) {
 
         LogEvent event{.level = level, .timestamp = std::chrono::system_clock::now(), .message = message};
@@ -202,15 +209,12 @@ template <typename... TargetT> class Logger {
     }
 
     std::tuple<TargetT...> targets_;
+    std::atomic<LogLevel> minimum_level_{LogLevel::trace};
 };
 
 // CTAD:
-//
-// Logger{Target{JsonRenderer{}, file_sink},
-//        Target{ConsoleRenderer{}, console_sink}}
-//
-// -> Logger<Target<JsonRenderer>, Target<ConsoleRenderer>>
-//
+//   Logger{Target{JsonRenderer{}, file_sink}, Target{ConsoleRenderer{}, console_sink}}
+//   -> Logger<Target<JsonRenderer>, Target<ConsoleRenderer>>
 
 template <typename... TargetT> Logger(TargetT...) -> Logger<TargetT...>;
 

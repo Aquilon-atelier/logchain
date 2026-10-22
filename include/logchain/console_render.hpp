@@ -15,9 +15,9 @@
 
 #pragma once
 
-#include "context.hpp"
-#include "detail/timestamp.hpp"
-#include "event.hpp"
+#include <logchain/context.hpp>
+#include <logchain/detail/timestamp.hpp>
+#include <logchain/event.hpp>
 
 #include <cstddef>
 #include <meta>

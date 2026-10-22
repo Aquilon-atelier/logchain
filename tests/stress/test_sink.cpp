@@ -17,7 +17,7 @@
 // Sink validation: actual writing + concurrency.
 //
 
-#include "logger.hpp"
+#include "logchain/logger.hpp"
 
 #include <cassert>
 #include <filesystem>

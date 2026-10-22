@@ -13,4 +13,4 @@ and this project adheres to Semantic Versioning.
 
 - Initial stable release.
 - C++26 static reflection.
-
+- Enable CMake Config mode

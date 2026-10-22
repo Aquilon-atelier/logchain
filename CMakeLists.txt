@@ -24,7 +24,7 @@ project(logchain
 
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16.0)
     message(WARNING
-        "logchain requires GCC >= 16.1 with experimental "
+        "logchain requires GCC >= 16 with experimental "
         "reflection support (P2996). Detected compiler: "
         "${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 endif()
@@ -59,17 +59,15 @@ add_library(logchain::logchain ALIAS logchain)
 
 target_include_directories(logchain INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+target_compile_features(logchain INTERFACE cxx_std_26)
 target_compile_options(logchain INTERFACE
-    -std=c++26
-    -freflection
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-freflection>
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
     EXPORT_NAME ${PROJECT_NAME}
 )
 

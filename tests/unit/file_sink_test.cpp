@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 
-#include "logger.hpp"
+#include "logchain/logger.hpp"
 
 #include <gtest/gtest.h>
 

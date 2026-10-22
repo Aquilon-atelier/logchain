@@ -15,10 +15,10 @@
 
 #pragma once
 
-#include "console_render.hpp"
-#include "context.hpp"
-#include "json_render.hpp"
-#include "sink.hpp"
+#include <logchain/console_render.hpp>
+#include <logchain/context.hpp>
+#include <logchain/json_render.hpp>
+#include <logchain/sink.hpp>
 
 #include <concepts>
 #include <string>

@@ -25,7 +25,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "size.hpp"
+#include <logchain/size.hpp>
 
 namespace logchain {
 

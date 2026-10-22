@@ -15,14 +15,16 @@
 
 #pragma once
 
-#include <type_traits>
+#include <chrono>
+#include <string_view>
 
+#include <logchain/log_level.hpp>
 namespace logchain {
 
-template <typename SinkT> struct default_renderer_for;
-
-// Convenience alias.
-template <typename SinkT>
-using default_renderer_for_t = typename default_renderer_for<std::remove_cvref_t<SinkT>>::type;
+struct LogEvent {
+    LogLevel level;
+    std::chrono::system_clock::time_point timestamp;
+    std::string_view message;
+};
 
 } // namespace logchain
