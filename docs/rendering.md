@@ -1,6 +1,4 @@
-Previous step [Getting Started](getting_started.md)  
-Next step [Log rotation](log_rotation.md)  
-  
+Previous step [Getting Started](getting_started.md) · [Index](index.md) · Next step [Log rotation](log_rotation.md)
 
 # Rendering
 
@@ -93,11 +91,9 @@ the same log event is rendered as JSON on the console and as human-readable text
 No change to the logging call is required.  
 This separation allows the same structured event to be rendered differently depending on its destination.
 
-## Call site
+## Call site and stack traces
 
-Both renderers can print where an event was logged (file, line and function) through their `source` option.  
+Both renderers can print where an event was logged (file, line and function) through their `source` option, and the stack trace of the exception that caused an error through their `stacktrace` option.  
 See [Call Site: Source Location and Stack Traces](source_location.md).
 
-
-Previous step [Getting Started](getting_started.md)  
-Next step [Log rotation](log_rotation.md)
+Previous step [Getting Started](getting_started.md) · [Index](index.md) · Next step [Log rotation](log_rotation.md)

@@ -20,6 +20,7 @@
 #include <logchain/log_level.hpp>
 #include <logchain/log_macro.hpp>
 #include <logchain/log_proxy.hpp>
+#include <logchain/stacktrace.hpp>
 #include <logchain/target.hpp>
 
 #include <atomic>
@@ -97,13 +98,17 @@ template <typename... TargetT> class Logger {
     // Public because it is called by LogProxy and by the macros.
     // Takes the Located by value: it is passed through, never re-captured.
     template <typename... Args> void log_unchecked(LogLevel level, Located message, Args &&...args) {
-        const CallInfo call{level, message.loc};
+        log_call(CallInfo{level, message.loc, nullptr}, message.message, std::forward<Args>(args)...);
+    }
 
-        if constexpr (sizeof...(Args) == 0) {
-            emit(call, std::string(message.message), make_context());
-        } else {
-            dispatch(call, message.message, std::forward<Args>(args)...);
-        }
+    // Event caused by an exception: `caused_by(ex)` is the first argument after
+    // the message and is not a format argument. This overload is more
+    // specialized than the one above, so it is selected (also when reached
+    // through log(), LogProxy or the LOG macros) whenever caused_by(...) comes
+    // first.
+    template <typename... Args>
+    void log_unchecked(LogLevel level, Located message, detail::CausedBy cause, Args &&...args) {
+        log_call(CallInfo{level, message.loc, cause.error}, message.message, std::forward<Args>(args)...);
     }
 
     // --- Per-level accessors: if (auto log = logger.debug()) log(...); ------
@@ -127,6 +132,14 @@ template <typename... TargetT> class Logger {
 
   private:
     template <typename... Args> static constexpr std::size_t named_count_v = detail::named_count_v<Args...>;
+
+    template <typename... Args> void log_call(CallInfo call, std::string_view message, Args &&...args) {
+        if constexpr (sizeof...(Args) == 0) {
+            emit(call, std::string(message), make_context());
+        } else {
+            dispatch(call, message, std::forward<Args>(args)...);
+        }
+    }
 
     // -----------------------------------------------------------------------
     // dispatch
@@ -204,8 +217,11 @@ template <typename... TargetT> class Logger {
 
     template <typename NodeT> void emit(CallInfo call, const std::string &message, const Context<NodeT> &ctx) {
 
-        LogEvent event{
-            .level = call.level, .timestamp = std::chrono::system_clock::now(), .message = message, .where = call.loc};
+        LogEvent event{.level = call.level,
+                       .timestamp = std::chrono::system_clock::now(),
+                       .message = message,
+                       .where = call.loc,
+                       .error = call.error};
 
         write(event, ctx);
     }

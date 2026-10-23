@@ -34,6 +34,7 @@ add_executable(${PROJECT_NAME}_unit_tests
     file_sink_test.cpp
     log_level_filtering_test.cpp
     source_location_test.cpp
+    stacktrace_test.cpp
     doc_example_test.cpp
 )
 

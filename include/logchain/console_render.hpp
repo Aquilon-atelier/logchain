@@ -18,6 +18,7 @@
 #include <logchain/context.hpp>
 #include <logchain/detail/timestamp.hpp>
 #include <logchain/event.hpp>
+#include <logchain/stacktrace.hpp>
 
 #include <cstddef>
 #include <meta>
@@ -26,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #if defined(_WIN32)
 #include <io.h>
@@ -359,6 +361,43 @@ template <typename Event> void append_console_function(std::string &out, const E
     append_console_gray(out, field, use_color);
 }
 
+// ===========================================================================
+// Stack trace (see stacktrace.hpp for when one is printed)
+//
+//   <the usual event line>
+//     #0 app::Service::run() at /src/service.cpp:42
+//     #1 main at /src/main.cpp:10
+//
+// One line per frame, below the event line, in gray when colors are enabled.
+// The file part is omitted when the file is unknown; so is the line when it
+// is zero (glibc frames, for instance, have no debug information).
+// ===========================================================================
+
+inline void append_console_stacktrace(std::string &out, const std::vector<StackFrame> &frames, bool use_color) {
+
+    for (std::size_t i = 0; i < frames.size(); ++i) {
+        const StackFrame &frame = frames[i];
+
+        std::string text = "  #";
+        text += std::to_string(i);
+        text += ' ';
+        text += frame.function.empty() ? std::string_view{"??"} : std::string_view{frame.function};
+
+        if (!frame.file.empty()) {
+            text += " at ";
+            text += frame.file;
+
+            if (frame.line != 0) {
+                text += ':';
+                text += std::to_string(frame.line);
+            }
+        }
+
+        out += '\n';
+        append_console_gray(out, text, use_color);
+    }
+}
+
 } // namespace detail
 
 // ===========================================================================
@@ -369,6 +408,10 @@ struct ConsoleRenderer {
 
     ColorMode colors = ColorMode::Auto;
     SourceMode source = SourceMode::Never;
+    // Print the stack trace of a traced exception passed with caused_by(...)
+    // (error and fatal events only). Independent of `source`; ignored when
+    // LOGCHAIN_WITH_STACKTRACE is not defined.
+    bool stacktrace = true;
 
     template <typename Event, typename NodeT>
     std::string render(const Event &event, const Context<NodeT> &context) const {
@@ -397,6 +440,10 @@ struct ConsoleRenderer {
 
         if (located && source == SourceMode::Full) {
             detail::append_console_function(out, event, use_color);
+        }
+
+        if (stacktrace) {
+            detail::append_console_stacktrace(out, detail::resolve_event_stack_frames(event), use_color);
         }
 
         return out;

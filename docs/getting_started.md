@@ -1,5 +1,4 @@
-Previous step [Index](index.md)  
-Next step: [Rendering](rendering.md)
+[Index](index.md) · Next step [Rendering](rendering.md)
 
 # Getting Started
 
@@ -9,6 +8,7 @@ Next step: [Rendering](rendering.md)
 At the time of writing, GCC 16 or later is the recommended compiler.  
 
 The library is header-only and has no external dependencies.  
+The optional [stack traces](source_location.md#stack-traces) additionally require `std::stacktrace` support in your standard library.
 
 ## Building logchain
 
@@ -36,6 +36,7 @@ The following CMake options control the project configuration.
 | `LOGCHAIN_BUILD_STRESS_TESTS` | `OFF` | Build the stress tests. |
 | `LOGCHAIN_FETCH_GTEST` | `OFF` | Download GoogleTest with `FetchContent` if it is not found locally. |
 | `LOGCHAIN_WARNINGS_AS_ERRORS` | `ON` | Treat compiler warnings as errors. |
+| `LOGCHAIN_WITH_STACKTRACE` | `OFF` | Enable [stack traces](source_location.md#stack-traces) for exceptions. |
 
 To enable the unit tests, configure the project with `LOGCHAIN_BUILD_TESTS=ON`:
 
@@ -183,5 +184,4 @@ logger.log(
 
 This form does not use the preprocessor and is suitable for projects that prefer an explicit, macro-free API.
 
-Previous step [Index](index.md)  
-Next step: [Rendering](rendering.md)
+[Index](index.md) · Next step [Rendering](rendering.md)

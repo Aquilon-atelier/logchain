@@ -1,4 +1,4 @@
-Previous step [Log Level and Filtering](log_level_filtering.md)  
+Previous step [Log Level and Filtering](log_level_filtering.md) · [Index](index.md) · Next step [Advanced](advanced/index.md)
 
 # Call Site: Source Location and Stack Traces
 
@@ -22,6 +22,8 @@ Because the option belongs to the renderer, the same event can show its location
 ConsoleRenderer{.source = SourceMode::Short}
 JsonRenderer{.source = SourceMode::Full}
 ```
+
+The [last section](#stack-traces) of this page covers the stack trace of an exception, which answers a different question: not where an event was logged, but how the program got to the failure.
 
 ## Console layout
 
@@ -255,16 +257,70 @@ The following behaviors are covered by the unit tests:
 
 ## Stack traces
 
-> **Not implemented yet.**
+Where `SourceMode` answers "which statement logged this event?", a stack trace answers "how did the program get there?".
 
-Support for stack traces (`std::stacktrace`) is planned. It will complement the call site described on this page: where `SourceMode` answers "which statement logged this event?", a stack trace answers "how did the program get there?".
+A stack trace is only useful if it is captured where the exception is **thrown**: a trace taken in a `catch` block describes the handler, not the failure. That is why `logchain` captures nothing when an event is logged. The trace travels **with the exception**, and the log call only declares which exception caused the event.
 
-This section will document the following once the feature is available:
+Stack traces are **opt-in at compile time** and cost nothing when disabled.
 
-* how to enable stack traces on a renderer;
-* how they are rendered by the console and JSON renderers;
-* their cost, and how level filtering keeps it away from disabled log statements.
+### Quick start
 
-Until then, use `SourceMode::Full` to get the file, the line and the enclosing function of each event.
+**1. Enable them.** With CMake:
 
-Previous step [Log Level and Filtering](log_level_filtering.md)
+```text
+cmake --preset stacktrace          # or: -DLOGCHAIN_WITH_STACKTRACE=ON
+```
+
+This requires `std::stacktrace` support in your standard library. If it is missing, the configuration stops with an explicit error.
+
+**2. Throw with `throw_traced`.** It captures the trace at the throw site. The thrown object is still a `std::runtime_error` for your existing `catch` blocks:
+
+```cpp
+void connect(int attempt) {
+    if (attempt > 1) {
+        throw_traced(std::runtime_error{"connection refused"});
+    }
+}
+```
+
+**3. Declare the cause when you log.** Pass `caused_by(ex)` right after the message. It is not a format argument:
+
+```cpp
+try {
+    connect(2);
+} catch (const std::exception &ex) {
+    LOG_ERROR(logger, "Request failed: {}", caused_by(ex), ex.what(), extra(request_id));
+}
+```
+
+The trace is printed below the event, innermost frame first:
+
+```text
+[2026-10-23T17:59:37.773827Z:ERROR:main.cpp:36] Request failed: connection refused  request_id=req-A
+  #0 connect(int) at /home/me/app/service.cpp:16
+  #1 main at /home/me/app/main.cpp:34
+  #2 __libc_start_call_main
+  #3 __libc_start_main_alias_2
+  #4 _start
+```
+
+With the JSON renderer, the frames are a `stacktrace` array in the same single-line event.
+
+### When is a trace printed?
+
+Only for an **error** or **fatal** event whose exception was thrown with `throw_traced` and declared with `caused_by(...)`. In every other case the output is unchanged: `caused_by` on a warning, or on an exception thrown some other way, is accepted and prints nothing extra.
+
+Each renderer has a `stacktrace` option (`true` by default), independent of `source`:
+
+```cpp
+ConsoleRenderer{.stacktrace = false}
+JsonRenderer{.source = SourceMode::Short}
+```
+
+Without `LOGCHAIN_WITH_STACKTRACE`, the same code compiles and runs unchanged: `throw_traced` is a plain `throw` and `caused_by` is ignored. You need no `#ifdef`.
+
+### Going further
+
+Build without CMake (where to put `-lstdc++exp`), the exact conditions, the JSON layout, what a trace contains, its cost and the design choices are described in [Stack Traces](advanced/stack_traces.md).
+
+Previous step [Log Level and Filtering](log_level_filtering.md) · [Index](index.md) · Next step [Advanced](advanced/index.md)

@@ -17,6 +17,7 @@
 
 #include <chrono>
 #include <concepts>
+#include <exception>
 #include <optional>
 #include <source_location>
 #include <string_view>
@@ -62,6 +63,8 @@ struct Located {
 struct CallInfo {
     LogLevel level;
     std::source_location loc;
+    // Exception declared with caused_by(...); null when the call has none.
+    const std::exception *error = nullptr;
 };
 
 struct LogEvent {
@@ -70,6 +73,9 @@ struct LogEvent {
     std::string_view message;
     // Call site of the LOG statement; empty for events built without one.
     std::optional<std::source_location> where = std::nullopt;
+    // Exception that caused the event (caused_by(...)); null for events logged
+    // without one. Non-owning: valid only while the event is being written.
+    const std::exception *error = nullptr;
 };
 
 } // namespace logchain
