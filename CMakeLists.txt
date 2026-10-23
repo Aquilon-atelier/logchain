@@ -74,6 +74,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 apply_project_compiler_options(${PROJECT_NAME})
 apply_project_warnings(${PROJECT_NAME})
 
+include(cmake/Stacktrace.cmake)
+logchain_configure_stacktrace(${PROJECT_NAME})
+
 # --- Subdirectories ------------------------------------------------------------
 if(${PROJECT_NAME_UPPER}_BUILD_EXAMPLES)
     add_subdirectory(examples)

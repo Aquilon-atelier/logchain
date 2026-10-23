@@ -1,5 +1,4 @@
-Previous step [Index](index.md)  
-Next step: [Rendering](rendering.md)
+[Index](index.md) · Next step [Rendering](rendering.md)
 
 # Getting Started
 
@@ -9,6 +8,7 @@ Next step: [Rendering](rendering.md)
 At the time of writing, GCC 16 or later is the recommended compiler.  
 
 The library is header-only and has no external dependencies.  
+The optional [stack traces](source_location.md#stack-traces) additionally require `std::stacktrace` support in your standard library.
 
 ## Building logchain
 
@@ -36,6 +36,7 @@ The following CMake options control the project configuration.
 | `LOGCHAIN_BUILD_STRESS_TESTS` | `OFF` | Build the stress tests. |
 | `LOGCHAIN_FETCH_GTEST` | `OFF` | Download GoogleTest with `FetchContent` if it is not found locally. |
 | `LOGCHAIN_WARNINGS_AS_ERRORS` | `ON` | Treat compiler warnings as errors. |
+| `LOGCHAIN_WITH_STACKTRACE` | `OFF` | Enable [stack traces](source_location.md#stack-traces) for exceptions. |
 
 To enable the unit tests, configure the project with `LOGCHAIN_BUILD_TESTS=ON`:
 
@@ -148,26 +149,32 @@ For example, the console renderer can produce a human-readable representation:
 2026-08-20T17:31:30.501852Z [INFO ] Request handled  request_id=req-A  user={name=bob age=35}  retry_count=3
 ```
 
-while a JSON renderer can preserve the structured fields:
+while a JSON renderer can preserve the structured fields, in the order of the `extra(...)` arguments:
 
 ```json
 {
   "timestamp": "2026-08-20T17:31:30.501852Z",
   "level": "INFO",
   "message": "Request handled",
+  "request_id": "req-A",
   "user": {
     "name": "bob",
     "age": 35
   },
-  "request_id": "req-A",
   "retry_count": 3
 }
+```
+
+The JSON is indented here for readability. `FileSink` actually writes one compact JSON object per line:
+
+```text
+{"timestamp":"2026-08-20T17:31:30.501852Z","level":"INFO","message":"Request handled","request_id":"req-A","user":{"name":"bob","age":35},"retry_count":3}
 ```
 
 The macro is optional. The same event can be created using the explicit API:
 
 ```cpp
-logger.log_named(
+logger.log(
     LogLevel::info,
     "Request handled",
     named("request_id", request_id),
@@ -177,5 +184,4 @@ logger.log_named(
 
 This form does not use the preprocessor and is suitable for projects that prefer an explicit, macro-free API.
 
-Previous step [Index](index.md)  
-Next step: [Rendering](rendering.md)
+[Index](index.md) · Next step [Rendering](rendering.md)

@@ -37,3 +37,10 @@ option(${PROJECT_NAME_UPPER}_ENABLE_THREAD_SANITIZER
     "Enable ThreadSanitizer (GCC/Clang only)" OFF)
 
 option(${PROJECT_NAME_UPPER}_INSTALL "Generate install and packaging targets" ON)
+
+# Stack traces of explicit exceptions (std::stacktrace), see cmake/Stacktrace.cmake.
+option(${PROJECT_NAME_UPPER}_WITH_STACKTRACE
+    "Enable stack traces for exceptions thrown with throw_traced() (std::stacktrace)" OFF)
+
+set(${PROJECT_NAME_UPPER}_STACKTRACE_LIBRARY "stdc++exp" CACHE STRING
+    "Library providing the backend of std::stacktrace: stdc++exp (recent GCC), stdc++_libbacktrace (older GCC), or empty")

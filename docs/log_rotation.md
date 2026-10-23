@@ -1,6 +1,4 @@
-Previous step [Rendering](rendering.md)  
-Next step [Log Level and Filtering](log_level_filtering.md)  
-
+Previous step [Rendering](rendering.md) · [Index](index.md) · Next step [Log Level and Filtering](log_level_filtering.md)
 
 # Log Rotation
 
@@ -143,9 +141,8 @@ FileSink sink2(FileSinkSettings{
 });
 ```
 
-This configuration is not supported.
+This configuration is not supported: the construction of the second sink throws.
 
-In particular, rotation requires a single owner for the log file. Multiple independent sinks writing to the same path could otherwise interfere with each other's writes and rotation state.  
 If multiple loggers need to write to the same log file, they should share the same `FileSink`:
 
 ```cpp
@@ -161,6 +158,8 @@ Logger logger2(target(sink));
 
 The `FileSink` is then shared by both loggers, providing a single point of synchronization and rotation management.
 
+## Going further
 
-Previous step [Rendering](rendering.md)  
-Next step [Log Level and Filtering](log_level_filtering.md)  
+How the rotation behaves in edge cases (an entry larger than `max_file_size`, write errors, several threads, several processes) and what the sink guarantees are described in [FileSink: Guarantees and Edge Cases](advanced/file_sink.md).
+
+Previous step [Rendering](rendering.md) · [Index](index.md) · Next step [Log Level and Filtering](log_level_filtering.md)

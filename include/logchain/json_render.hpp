@@ -17,10 +17,14 @@
 
 #include <logchain/context.hpp>
 #include <logchain/detail/timestamp.hpp>
+#include <logchain/event.hpp>
+#include <logchain/stacktrace.hpp>
 
 #include <cstddef>
 #include <cstdio>
 #include <meta>
+#include <optional>
+#include <source_location>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -84,6 +88,56 @@ inline std::string json_escape_string(std::string_view s) {
     }
     out.push_back('"');
     return out;
+}
+
+// Call-site object, appended right after "message":
+//   ,"source":{"file":...,"line":N}                       (Short: file basename)
+//   ,"source":{"file":...,"line":N,"function":...}        (Full)
+// A single reserved key keeps user context names (e.g. "file", "line") from
+// colliding with the call-site fields.
+inline void append_json_source(std::string &out, const std::source_location &loc, SourceMode mode) {
+    const std::string_view file = loc.file_name();
+
+    out += ",\"source\":{\"file\":";
+    out += json_escape_string(mode == SourceMode::Short ? source_basename(file) : file);
+    out += ",\"line\":";
+    out += std::to_string(loc.line());
+
+    if (mode == SourceMode::Full) {
+        out += ",\"function\":";
+        out += json_escape_string(loc.function_name());
+    }
+
+    out += '}';
+}
+
+// Stack trace (see stacktrace.hpp for when one is printed), appended after
+// "source" and before the context fields:
+//   ,"stacktrace":[{"function":...,"file":...,"line":N},...]
+// Innermost frame first. "file" is the path found in the debug information
+// ("" and line 0 when unknown). Like "source", the key is reserved.
+inline void append_json_stacktrace(std::string &out, const std::vector<StackFrame> &frames) {
+    out += ",\"stacktrace\":[";
+
+    bool first = true;
+
+    for (const StackFrame &frame : frames) {
+        if (!first) {
+            out += ',';
+        }
+
+        first = false;
+
+        out += "{\"function\":";
+        out += json_escape_string(frame.function);
+        out += ",\"file\":";
+        out += json_escape_string(frame.file);
+        out += ",\"line\":";
+        out += std::to_string(frame.line);
+        out += '}';
+    }
+
+    out += ']';
 }
 
 } // namespace detail
@@ -191,6 +245,12 @@ void collect_json_fields(const ContextNode<T, ParentNode> &node, std::vector<std
 
 struct JsonRenderer {
 
+    SourceMode source = SourceMode::Never;
+    // Print the stack trace of a traced exception passed with caused_by(...)
+    // (error and fatal events only). Independent of `source`; ignored when
+    // LOGCHAIN_WITH_STACKTRACE is not defined.
+    bool stacktrace = true;
+
     template <typename Event, typename NodeT>
     std::string render(const Event &event, const Context<NodeT> &context) const {
 
@@ -211,6 +271,18 @@ struct JsonRenderer {
 
         out += ",\"message\":";
         out += detail::json_escape_string(event.message);
+
+        if (source != SourceMode::Never && event.where) {
+            detail::append_json_source(out, *event.where, source);
+        }
+
+        if (stacktrace) {
+            const auto frames = detail::resolve_event_stack_frames(event);
+
+            if (!frames.empty()) {
+                detail::append_json_stacktrace(out, frames);
+            }
+        }
 
         for (const auto &field : fields) {
             out += ',';

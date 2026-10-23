@@ -52,6 +52,14 @@
             }
         },
         {
+            "name": "stacktrace",
+            "inherits": "debug",
+            "displayName": "Debug + std::stacktrace",
+            "cacheVariables": {
+                "LOGCHAIN_WITH_STACKTRACE": "ON"
+            }
+        },
+        {
             "name": "ci",
             "inherits": "release",
             "displayName": "CI (tests on, GTest FetchContent fallback allowed)",
@@ -80,6 +88,10 @@
             "configurePreset": "tsan"
         },
         {
+            "name": "stacktrace",
+            "configurePreset": "stacktrace"
+        },
+        {
             "name": "ci",
             "configurePreset": "ci"
         }
@@ -88,6 +100,16 @@
         {
             "name": "debug",
             "configurePreset": "debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error"
+            }
+        },
+        {
+            "name": "stacktrace",
+            "configurePreset": "stacktrace",
             "output": {
                 "outputOnFailure": true
             },

@@ -1,11 +1,32 @@
-// tests/unit/log_level_filtering_test.cpp
+// Copyright (c) 2026 Sylvain Ladoux
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
-#include "logchain/log_level_filtering.hpp"
+// Level filtering and early dispatch, checked against the production Logger
+// (logger.hpp, log_proxy.hpp, log_macro.hpp).
+//
+// Most tests only observe WHETHER arguments are evaluated, which needs no
+// output: they use a Logger without any target (Logger<>). The tests that
+// must observe whether an event reaches the pipeline use a CaptureSink.
+
+#include <logchain/logger.hpp>
 
 #include <gtest/gtest.h>
 
-#include <atomic>
 #include <string>
+#include <string_view>
+#include <vector>
 
 using logchain::Logger;
 using logchain::LogLevel;
@@ -20,12 +41,26 @@ std::string expensive() {
     return "computed-value";
 }
 
-Logger &get_logger() {
+Logger<> &get_logger() {
     ++g_logger_expression_calls;
 
     static Logger logger;
     return logger;
 }
+
+// Records every rendered event, to observe what actually reaches the pipeline.
+struct CaptureSink final : logchain::Sink {
+    std::vector<std::string> lines;
+
+    void write(std::string_view message) override { lines.emplace_back(message); }
+};
+
+// A logger rendering plain console text (no colors) into a CaptureSink.
+struct CapturedLogger {
+    CaptureSink sink;
+    Logger<logchain::Target<logchain::ConsoleRenderer>> logger{
+        logchain::Target{logchain::ConsoleRenderer{.colors = logchain::ColorMode::Never}, sink}};
+};
 
 // -----------------------------------------------------------------------------
 // Fixture
@@ -160,31 +195,25 @@ TEST_F(LogLevelFilteringTest, EnabledMacroEvaluatesArguments) {
     EXPECT_EQ(g_expensive_calls, 1);
 }
 
-TEST_F(LogLevelFilteringTest, DisabledMacroDoesNotInvokeUncheckedPipeline) {
-    // With the current reference implementation this is indirectly verified
-    // by the fact that the argument is not evaluated.
-    //
-    // Once Logger gets an injectable target/spy, this test should additionally
-    // verify that the target pipeline is never entered.
-    Logger logger;
+TEST_F(LogLevelFilteringTest, DisabledMacroDoesNotReachThePipeline) {
+    CapturedLogger captured;
 
-    logger.set_minimum_level(LogLevel::error);
+    captured.logger.set_minimum_level(LogLevel::error);
 
-    LOG_WARN(logger, "must not reach pipeline");
+    LOG_WARN(captured.logger, "must not reach pipeline");
 
-    SUCCEED();
+    EXPECT_TRUE(captured.sink.lines.empty());
 }
 
-TEST_F(LogLevelFilteringTest, EnabledMacroInvokesUncheckedPipeline) {
-    Logger logger;
+TEST_F(LogLevelFilteringTest, EnabledMacroReachesThePipeline) {
+    CapturedLogger captured;
 
-    logger.set_minimum_level(LogLevel::warning);
+    captured.logger.set_minimum_level(LogLevel::warning);
 
-    // log_unchecked() currently prints to stdout. The observable contract
-    // here is that the call is reached when the level is enabled.
-    LOG_WARN(logger, "warning");
+    LOG_WARN(captured.logger, "warning");
 
-    SUCCEED();
+    ASSERT_EQ(captured.sink.lines.size(), std::size_t{1});
+    EXPECT_NE(captured.sink.lines.front().find(" [WARN ] warning"), std::string::npos);
 }
 
 // ============================================================================
@@ -228,7 +257,7 @@ TEST_F(LogLevelFilteringTest, LoggerExpressionIsEvaluatedExactlyOnce) {
 }
 
 TEST_F(LogLevelFilteringTest, DisabledMacroStillEvaluatesLoggerExpressionExactlyOnce) {
-    Logger &logger = get_logger();
+    Logger<> &logger = get_logger();
     logger.set_minimum_level(LogLevel::error);
 
     g_logger_expression_calls = 0;
@@ -241,7 +270,7 @@ TEST_F(LogLevelFilteringTest, DisabledMacroStillEvaluatesLoggerExpressionExactly
 }
 
 TEST_F(LogLevelFilteringTest, DynamicMacroEvaluatesLoggerExpressionExactlyOnce) {
-    Logger &logger = get_logger();
+    Logger<> &logger = get_logger();
     logger.set_minimum_level(LogLevel::warning);
 
     g_logger_expression_calls = 0;
@@ -329,13 +358,15 @@ TEST_F(LogLevelFilteringTest, GenericLogCannotPreventArgumentEvaluation) {
 }
 
 TEST_F(LogLevelFilteringTest, GenericLogStillFiltersDisabledLevel) {
-    Logger logger;
+    CapturedLogger captured;
 
-    logger.set_minimum_level(LogLevel::warning);
+    captured.logger.set_minimum_level(LogLevel::warning);
 
-    // The argument is already evaluated, but log_unchecked() must not be
+    // The argument is already evaluated, but the pipeline must not be
     // entered because DEBUG is disabled.
-    logger.log(LogLevel::debug, "filtered");
+    captured.logger.log(LogLevel::debug, "filtered");
+
+    EXPECT_TRUE(captured.sink.lines.empty());
 }
 
 TEST_F(LogLevelFilteringTest, GenericLogEvaluatesEnabledArgumentOnce) {
