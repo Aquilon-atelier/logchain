@@ -148,26 +148,32 @@ For example, the console renderer can produce a human-readable representation:
 2026-08-20T17:31:30.501852Z [INFO ] Request handled  request_id=req-A  user={name=bob age=35}  retry_count=3
 ```
 
-while a JSON renderer can preserve the structured fields:
+while a JSON renderer can preserve the structured fields, in the order of the `extra(...)` arguments:
 
 ```json
 {
   "timestamp": "2026-08-20T17:31:30.501852Z",
   "level": "INFO",
   "message": "Request handled",
+  "request_id": "req-A",
   "user": {
     "name": "bob",
     "age": 35
   },
-  "request_id": "req-A",
   "retry_count": 3
 }
+```
+
+The JSON is indented here for readability. `FileSink` actually writes one compact JSON object per line:
+
+```text
+{"timestamp":"2026-08-20T17:31:30.501852Z","level":"INFO","message":"Request handled","request_id":"req-A","user":{"name":"bob","age":35},"retry_count":3}
 ```
 
 The macro is optional. The same event can be created using the explicit API:
 
 ```cpp
-logger.log_named(
+logger.log(
     LogLevel::info,
     "Request handled",
     named("request_id", request_id),

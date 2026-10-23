@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <logchain/event.hpp>
 #include <logchain/log_level.hpp>
 
 #include <utility>
@@ -36,8 +37,10 @@ template <LogLevel Level, typename LoggerT> class LogProxy {
     [[nodiscard]] explicit operator bool() const noexcept { return logger_.is_enabled(Level); }
 
     // Only call if operator bool() has just returned true.
-    template <typename... Args> void operator()(Args &&...args) {
-        logger_.log_unchecked(Level, std::forward<Args>(args)...);
+    // `message` is a Located so that the call site is captured HERE, in the
+    // caller's expression: it must not travel through the Args pack first.
+    template <typename... Args> void operator()(Located message, Args &&...args) {
+        logger_.log_unchecked(Level, message, std::forward<Args>(args)...);
     }
 
   private:

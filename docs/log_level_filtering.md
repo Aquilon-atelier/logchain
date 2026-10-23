@@ -1,4 +1,5 @@
 Previous step [Log rotation](log_rotation.md)  
+Next step [Call Site: Source Location and Stack Traces](source_location.md)
 
 
 # Log Level Filtering
@@ -16,7 +17,7 @@ enum class LogLevel {
     error,
     fatal
 };
-````
+```
 
 `Logger` supports runtime filtering of log messages through a minimum log level.
 The minimum level is configured with `set_minimum_level()`:
@@ -306,5 +307,5 @@ logger.log(LogLevel::debug, build_expensive_debug_state());
 For performance-sensitive logging, prefer the early-filtering APIs when the level is known at the call site.
 
 Previous step [Log rotation](log_rotation.md)
-
+Next step [Call Site: Source Location and Stack Traces](source_location.md)
 

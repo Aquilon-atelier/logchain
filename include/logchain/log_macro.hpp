@@ -36,9 +36,13 @@
 #define LOGCHAIN_EXTRA(...) ::logchain::detail::make_extra(SCL_FOR_EACH(SCL_NAMED_ARG, __VA_ARGS__))
 
 // ---------------------------------------------------------------------------
-// LOGCHAIN_LOG : capture `logger_expr` une seule fois, teste le niveau AVANT
-// d'évaluer les arguments du message (ils ne sont évalués que si le niveau est
-// actif), puis appelle log_unchecked().
+// LOGCHAIN_LOG : captures `logger_expr` exactly once, tests the level BEFORE
+// evaluating the message arguments (they are only evaluated when the level is
+// enabled), then calls log_unchecked().
+//
+// `logger_expr` is bound once to a local reference (do/while(0) + auto&&), so
+// the macro is safe even when the expression has side effects, e.g.
+// LOGCHAIN_LOG(get_logger(), ...).
 // ---------------------------------------------------------------------------
 #define LOGCHAIN_LOG(logger_expr, level, message, ...)                                                                 \
     do {                                                                                                               \
@@ -61,6 +65,12 @@
 #define LOGCHAIN_LOG_FATAL(logger, message, ...)                                                                       \
     LOGCHAIN_LOG(logger, ::logchain::LogLevel::fatal, message __VA_OPT__(, ) __VA_ARGS__)
 
+// ---------------------------------------------------------------------------
+// Short macros (extra, LOG, LOG_DEBUG, ...) are provided by default. Define
+// LOGCHAIN_NO_SHORT_MACROS before including logchain to disable them when
+// they collide with another library (glog, Abseil, ...); the LOGCHAIN_*
+// forms remain available.
+// ---------------------------------------------------------------------------
 #ifndef LOGCHAIN_NO_SHORT_MACROS
 #define extra LOGCHAIN_EXTRA
 #define LOG LOGCHAIN_LOG

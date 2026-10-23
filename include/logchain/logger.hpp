@@ -84,7 +84,10 @@ template <typename... TargetT> class Logger {
 
     // Generic API with an internal level guard. Cannot prevent the caller
     // from evaluating its arguments (use the macros or the proxies for that).
-    template <typename... Args> void log(LogLevel level, std::string_view message, Args &&...args) {
+    //
+    // `message` is a Located: the call site is captured by its default
+    // argument, in the caller's expression (see event.hpp).
+    template <typename... Args> void log(LogLevel level, Located message, Args &&...args) {
         if (is_enabled(level)) {
             log_unchecked(level, message, std::forward<Args>(args)...);
         }
@@ -92,11 +95,14 @@ template <typename... TargetT> class Logger {
 
     // Internal primitive: assumes is_enabled(level) is already true.
     // Public because it is called by LogProxy and by the macros.
-    template <typename... Args> void log_unchecked(LogLevel level, std::string_view message, Args &&...args) {
+    // Takes the Located by value: it is passed through, never re-captured.
+    template <typename... Args> void log_unchecked(LogLevel level, Located message, Args &&...args) {
+        const CallInfo call{level, message.loc};
+
         if constexpr (sizeof...(Args) == 0) {
-            emit(level, std::string(message), make_context());
+            emit(call, std::string(message.message), make_context());
         } else {
-            dispatch(level, message, std::forward<Args>(args)...);
+            dispatch(call, message.message, std::forward<Args>(args)...);
         }
     }
 
@@ -126,18 +132,18 @@ template <typename... TargetT> class Logger {
     // dispatch
     // -----------------------------------------------------------------------
 
-    template <typename... Args> void dispatch(LogLevel level, std::string_view message, Args &&...args) {
+    template <typename... Args> void dispatch(CallInfo call, std::string_view message, Args &&...args) {
         using LastT = std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>;
 
         if constexpr (detail::is_extra_v<LastT>) {
-            dispatch_with_extra(level, message, std::make_index_sequence<sizeof...(Args) - 1>{},
+            dispatch_with_extra(call, message, std::make_index_sequence<sizeof...(Args) - 1>{},
                                 std::forward<Args>(args)...);
         } else if constexpr (named_count_v<Args...> > 0) {
-            dispatch_with_named(level, message, std::forward<Args>(args)...);
+            dispatch_with_named(call, message, std::forward<Args>(args)...);
         } else {
             std::string formatted = std::vformat(message, std::make_format_args(args...));
 
-            emit(level, formatted, make_context());
+            emit(call, formatted, make_context());
         }
     }
 
@@ -146,7 +152,7 @@ template <typename... TargetT> class Logger {
     // -----------------------------------------------------------------------
 
     template <std::size_t... Is, typename... Args>
-    void dispatch_with_extra(LogLevel level, std::string_view message, std::index_sequence<Is...>, Args &&...args) {
+    void dispatch_with_extra(CallInfo call, std::string_view message, std::index_sequence<Is...>, Args &&...args) {
 
         auto args_tuple = std::forward_as_tuple(args...);
 
@@ -156,14 +162,14 @@ template <typename... TargetT> class Logger {
 
         auto ctx = make_context_from(extra_obj);
 
-        emit(level, formatted, ctx);
+        emit(call, formatted, ctx);
     }
 
     // -----------------------------------------------------------------------
     // Explicit named(...) path.
     // -----------------------------------------------------------------------
 
-    template <typename... Args> void dispatch_with_named(LogLevel level, std::string_view message, Args &&...args) {
+    template <typename... Args> void dispatch_with_named(CallInfo call, std::string_view message, Args &&...args) {
 
         constexpr std::size_t total = sizeof...(Args);
         constexpr std::size_t named_count = named_count_v<Args...>;
@@ -171,12 +177,12 @@ template <typename... TargetT> class Logger {
 
         auto args_tuple = std::forward_as_tuple(std::forward<Args>(args)...);
 
-        dispatch_with_named_impl(level, message, std::move(args_tuple), std::make_index_sequence<format_count>{},
+        dispatch_with_named_impl(call, message, std::move(args_tuple), std::make_index_sequence<format_count>{},
                                  std::make_index_sequence<named_count>{});
     }
 
     template <typename Tuple, std::size_t... FormatIs, std::size_t... NamedIs>
-    void dispatch_with_named_impl(LogLevel level, std::string_view message, Tuple &&args_tuple,
+    void dispatch_with_named_impl(CallInfo call, std::string_view message, Tuple &&args_tuple,
                                   std::index_sequence<FormatIs...>, std::index_sequence<NamedIs...>) {
 
         constexpr std::size_t format_count = sizeof...(FormatIs);
@@ -185,7 +191,7 @@ template <typename... TargetT> class Logger {
 
         auto ctx = make_context(std::get<format_count + NamedIs>(args_tuple)...);
 
-        emit(level, formatted, ctx);
+        emit(call, formatted, ctx);
     }
 
     // -----------------------------------------------------------------------
@@ -196,9 +202,10 @@ template <typename... TargetT> class Logger {
         return std::apply([](auto &...named) { return make_context(named...); }, e.items);
     }
 
-    template <typename NodeT> void emit(LogLevel level, const std::string &message, const Context<NodeT> &ctx) {
+    template <typename NodeT> void emit(CallInfo call, const std::string &message, const Context<NodeT> &ctx) {
 
-        LogEvent event{.level = level, .timestamp = std::chrono::system_clock::now(), .message = message};
+        LogEvent event{
+            .level = call.level, .timestamp = std::chrono::system_clock::now(), .message = message, .where = call.loc};
 
         write(event, ctx);
     }
