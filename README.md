@@ -42,8 +42,6 @@ The library does not require a global mutable logging context.
 
 ## Examples
 
-## Examples
-
 ### Explicit API
 
 The core logging API does not require macros. Argument names can be provided explicitly using `named()`:
