@@ -15,7 +15,7 @@ The optional [stack traces](source_location.md#stack-traces) additionally requir
 After cloning the repository, configure and build the project using one of the provided CMake presets.
 
 ```bash
-git clone https://github.com/Aquilon-io/logchain.git
+git clone https://github.com/Aquilon-atelier/logchain.git
 cd logchain
 
 cmake --preset=release
