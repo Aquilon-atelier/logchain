@@ -16,6 +16,7 @@
 #pragma once
 
 #include <logchain/context.hpp>
+#include <logchain/detail/members.hpp>
 #include <logchain/detail/timestamp.hpp>
 #include <logchain/event.hpp>
 #include <logchain/stacktrace.hpp>
@@ -178,41 +179,26 @@ namespace detail {
 // ---------------------------------------------------------------------
 // Aggregate fallback: nonstatic_data_members_of() (P2996).
 //
-// The array of members is exposed via a STATIC member of a struct
-// templated on T (MembersOf<T>::value), never via a function parameter.
-// This fixes the bug reported by your build: a function parameter is
-// never a constant expression within the function body, even if the
-// argument passed at the call site is static constexpr—so neither
-// members.size() nor members[I] could have been used as constant
-// expressions once "members" was received as const MembersT&.
-// MembersOf<T>::value, as a static constexpr member, remains a constant
-// expression wherever T is visible—at all recursion levels—without ever
-// passing through a parameter.
-template <typename T> struct MembersOf {
-    static constexpr auto value =
-        std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
-};
-
-template <typename T, std::size_t I, std::size_t N> void append_members(const T &obj, std::string &out) {
-    if constexpr (I < N) {
-        constexpr auto member = MembersOf<T>::value[I];
+// Members are reached through member_count<T>() / member_at<T, I>()
+// (detail/members.hpp) instead of a static array of reflections: see the
+// comment there (GCC PR 127002, same-named local classes).
+template <typename T, std::size_t I> void append_members(const T &obj, std::string &out) {
+    if constexpr (I < member_count<T>()) {
         if constexpr (I > 0) {
             out += ',';
         }
-        constexpr auto name = std::define_static_string(std::meta::identifier_of(member));
+        constexpr auto name = std::define_static_string(std::meta::identifier_of(member_at<T, I>()));
         out += json_escape_string(std::string_view(name));
         out += ':';
-        out += logchain::to_json(obj.[:member:]);
+        out += logchain::to_json(obj.[:member_at<T, I>():]);
 
-        append_members<T, I + 1, N>(obj, out);
+        append_members<T, I + 1>(obj, out);
     }
 }
 
 template <typename T> std::string aggregate_to_json(const T &obj) {
-    constexpr std::size_t member_count = MembersOf<T>::value.size();
-
     std::string out = "{";
-    append_members<T, 0, member_count>(obj, out);
+    append_members<T, 0>(obj, out);
     out += "}";
     return out;
 }

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <logchain/context.hpp>
+#include <logchain/detail/members.hpp>
 #include <logchain/detail/timestamp.hpp>
 #include <logchain/event.hpp>
 #include <logchain/stacktrace.hpp>
@@ -207,30 +208,28 @@ inline void append_console_string(std::string &out, std::string_view value) {
 // Console aggregate reflection
 // ===========================================================================
 
-template <typename T> struct ConsoleMembersOf {
-    static constexpr auto value =
-        std::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
-};
+// Members are reached through member_count<T>() / member_at<T, I>()
+// (detail/members.hpp) instead of a static array of reflections: see the
+// comment there (GCC PR 127002, same-named local classes).
 
 template <typename T> void append_console_value(std::string &out, const T &value);
 
-template <typename T, std::size_t I, std::size_t N> void append_console_members(const T &obj, std::string &out) {
+template <typename T, std::size_t I> void append_console_members(const T &obj, std::string &out) {
 
-    if constexpr (I < N) {
-        constexpr auto member = ConsoleMembersOf<T>::value[I];
+    if constexpr (I < member_count<T>()) {
 
         if constexpr (I > 0) {
             out += ' ';
         }
 
-        constexpr auto name = std::define_static_string(std::meta::identifier_of(member));
+        constexpr auto name = std::define_static_string(std::meta::identifier_of(member_at<T, I>()));
 
         out += std::string_view(name);
         out += '=';
 
-        append_console_value(out, obj.[:member:]);
+        append_console_value(out, obj.[:member_at<T, I>():]);
 
-        append_console_members<T, I + 1, N>(obj, out);
+        append_console_members<T, I + 1>(obj, out);
     }
 }
 
@@ -256,11 +255,9 @@ template <typename T> void append_console_value(std::string &out, const T &value
 
     } else if constexpr (std::is_class_v<D> && std::is_aggregate_v<D>) {
 
-        constexpr std::size_t member_count = ConsoleMembersOf<D>::value.size();
-
         out.push_back('{');
 
-        append_console_members<D, 0, member_count>(value, out);
+        append_console_members<D, 0>(value, out);
 
         out.push_back('}');
 
