@@ -49,11 +49,11 @@ TEST(console_sink, mem_check) {
 
     const void *user_node_via_a = request_a.underlying_node()->parent->parent.get();
     const void *user_node_via_b = request_b.underlying_node()->parent->parent.get();
-    assert(user_node_via_a == user_node_via_b);
+    EXPECT_EQ(user_node_via_a, user_node_via_b);
     std::cout << "User node memory sharing confirmed (address " << user_node_via_a << ")\n";
 
-    assert(with_user.underlying_node()->value == "bob");
-    std::cout << "with_user (inchangé) : " << with_user.underlying_node()->value << "\n";
+    EXPECT_EQ(with_user.underlying_node()->value, "bob");
+    std::cout << "with_user (unchanged) : " << with_user.underlying_node()->value << "\n";
 }
 
 TEST(file_sink, log) {
@@ -70,18 +70,18 @@ TEST(file_sink, log) {
     {
         FileSink file_sink(log_path);
         Logger file_logger(target(file_sink));
-        LOG(file_logger, LogLevel::info, "requete traitee", extra(user, request_id_a, retry_count));
-        LOG(file_logger, LogLevel::info, "requete traitee", extra(user, request_id_b, 0));
+        LOG(file_logger, LogLevel::info, "request handled", extra(user, request_id_a, retry_count));
+        LOG(file_logger, LogLevel::info, "request handled", extra(user, request_id_b, 0));
     }
 
     std::ifstream in(log_path);
     std::string line;
     std::size_t count = 0;
     while (std::getline(in, line)) {
-        std::cout << "  ligne relue : " << line << "\n";
+        std::cout << "  line read : " << line << "\n";
         ++count;
     }
-    assert(count == 2);
+    EXPECT_EQ(count, std::size_t{2});
     fs::remove(log_path);
 }
 
