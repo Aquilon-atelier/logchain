@@ -19,7 +19,7 @@
 
 #include "logchain/logger.hpp"
 
-#include <cassert>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -29,6 +29,20 @@
 #include <vector>
 
 using namespace logchain;
+
+namespace {
+
+// Unlike assert(), CHECK stays active in every build type (Release included,
+// where NDEBUG removes assert() together with the variables only it used).
+#define CHECK(condition)                                                                                               \
+    do {                                                                                                               \
+        if (!(condition)) {                                                                                            \
+            std::cerr << __FILE__ << ':' << __LINE__ << ": CHECK failed: " #condition "\n";                            \
+            std::abort();                                                                                              \
+        }                                                                                                              \
+    } while (false)
+
+} // namespace
 
 int main() {
     namespace fs = std::filesystem;
@@ -42,23 +56,23 @@ int main() {
 
         std::string user{"bob"};
         int retry_count{3};
-        LOG(file_logger, LogLevel::info, "first line", user); 
-        LOG(file_logger, LogLevel::info, "second line", retry_count); 
-        } 
-        { 
-        std::ifstream in(log_path); 
-        std::string line1, line2; 
-        std::getline(in, line1); 
-        std::getline(in, line2); 
-        const std::regex line1_re( 
-        R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"first line","user":"bob"\})"); 
+        LOG(file_logger, LogLevel::info, "first line", extra(user));
+        LOG(file_logger, LogLevel::info, "second line", extra(retry_count));
+    }
+    {
+        std::ifstream in(log_path);
+        std::string line1, line2;
+        std::getline(in, line1);
+        std::getline(in, line2);
+        const std::regex line1_re(
+            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"first line","user":"bob"\})");
 
-        const std::regex line2_re( 
-        R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"second line","retry_count":3\})"); 
+        const std::regex line2_re(
+            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"second line","retry_count":3\})");
 
-        assert(std::regex_match(line1, line1_re)); 
-        assert(std::regex_match(line2, line2_re)); 
-        std::cout << "File read correctly:\n " << line1 << "\n " << line2 << "\n";
+        CHECK(std::regex_match(line1, line1_re));
+        CHECK(std::regex_match(line2, line2_re));
+        std::cout << "File read correctly:\n  " << line1 << "\n  " << line2 << "\n";
     }
 
     // Concurrency: N threads, each with M logs, a single shared
@@ -77,7 +91,7 @@ int main() {
             threads.emplace_back([&shared_sink, t] {
                 Logger logger(target(shared_sink)); // one Logger per thread, a single Sink
                 for (int i = 0; i < kLogsPerThread; ++i) {
-                    LOG(logger, LogLevel::info, "thread-message", t, i);
+                    LOG(logger, LogLevel::info, "thread-message", extra(t, i));
                 }
             });
         }
@@ -93,20 +107,18 @@ int main() {
         while (std::getline(in, line)) {
             // Each line must constitute a complete JSON event.
             // The timestamp is structurally validated, but its value is dynamic.
-            assert(std::regex_match(line, line_re));
-            assert(!line.empty() && line.back() == '}');
+            CHECK(std::regex_match(line, line_re));
+            CHECK(!line.empty() && line.back() == '}');
 
             ++line_count;
         }
 
-        assert(line_count == static_cast<std::size_t>(kThreads * kLogsPerThread));
+        CHECK(line_count == static_cast<std::size_t>(kThreads * kLogsPerThread));
 
-    std::cout << "Concurrency: " << line_count << " lines written by 8 threads, no corruption.\n";
-
+        std::cout << "Concurrency : " << line_count << " lines written by 8 threads, no corruption.\n";
     }
 
     fs::remove(log_path);
-
     std::cout << "OK — all sink checks passed.\n";
     return 0;
 }

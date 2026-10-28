@@ -26,3 +26,8 @@ target_link_libraries(${PROJECT_NAME}_stress_tests
 
 apply_project_warnings(${PROJECT_NAME}_stress_tests)
 
+# GCC 16 -O3 false positive between the Logger's shared_ptr and std::regex internals.
+target_compile_options(${PROJECT_NAME}_stress_tests PRIVATE
+    -Wno-array-bounds
+    -Wno-null-dereference
+)
