@@ -55,7 +55,7 @@ template <typename NodeT> class Context {
     const std::shared_ptr<const NodeT> &underlying_node() const { return node_; }
 
   private:
-    std::shared_ptr<const NodeT> node_; // recopié (refcount++), jamais réalloué
+    std::shared_ptr<const NodeT> node_; // copied (refcount++), never reallocated
 };
 inline Context<RootNode> root_context() { return Context<RootNode>(std::make_shared<const RootNode>()); }
 // ===========================================================================

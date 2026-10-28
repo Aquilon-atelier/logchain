@@ -27,10 +27,6 @@
 //     get_logger()...) are replaced by small instrumented stubs;
 //   - sizes such as 1 MiB are shrunk when only the rotation logic matters.
 //
-// "DOC MISMATCH" marks a place where the documentation, as written, does not
-// match the library. The test then checks the working equivalent, so that the
-// suite documents the gap until either the page or the library is fixed.
-//
 // Timestamps are replaced by <TS> and ANSI colors are stripped before
 // comparison, so default renderers (ColorMode::Auto) are safe to use here
 // whether or not the tests run in a terminal.
@@ -44,11 +40,13 @@
 
 #include <array>
 #include <chrono>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -175,9 +173,8 @@ struct User {
 // "Basic usage": a console sink and a file sink, default renderers.
 // Doc output is pretty-printed JSON for readability; the file really holds one
 // compact JSON object per line.
-// DOC MISMATCH (order): the documented JSON lists "user" before "request_id",
-// but fields are rendered in the order of the extra(...) arguments:
-// request_id, user, retry_count.
+// The JSON fields follow the order of the extra(...) arguments: request_id,
+// user, retry_count.
 TEST_F(DocExamples, GettingStartedBasicUsage) {
     std::ostringstream console_out;
     ConsoleSink console_sink{console_out};
@@ -202,8 +199,7 @@ TEST_F(DocExamples, GettingStartedBasicUsage) {
 }
 
 // "The macro is optional": the explicit, macro-free API.
-// DOC MISMATCH: the page shows logger.log_named(LogLevel::info, ...), which
-// does not exist. The explicit form is logger.log(level, message, named(...)...).
+// The explicit form is logger.log(level, message, named(...)...).
 TEST_F(DocExamples, GettingStartedExplicitApiGivesTheSameEventAsTheMacro) {
     Captured c;
 
@@ -253,9 +249,8 @@ TEST_F(DocExamples, RenderingDefaultRenderers) {
 
 // "Selecting a renderer explicitly": the renderers are deliberately swapped
 // and the logging call is unchanged.
-// DOC MISMATCH: the page writes target(console_sink, JsonRenderer{}), but
-// target() only takes a sink (it picks the default renderer). The explicit
-// form is Target{JsonRenderer{}, console_sink}.
+// target(sink) only picks the default renderer of the sink: the explicit form
+// is Target{JsonRenderer{}, console_sink}, renderer first.
 TEST_F(DocExamples, RenderingSwappedRenderers) {
     std::ostringstream console_out;
     ConsoleSink console_sink{console_out};
@@ -778,7 +773,7 @@ TEST_F(DocExamples, SourceLocationFullQuotesTheFunctionName) {
     int line = 0;
     LOG_ERROR(c.logger, "Request failed"); line = __LINE__;
 
-  // Full prints the path as given to the compiler (not the basename).
+    // Full prints the path as given to the compiler (not the basename).
     const auto &s = c.sink.last();
     EXPECT_TRUE(contains(s, ":ERROR:" + std::string{__FILE__} + ":" + std::to_string(line) +
                                 "] Request failed  function=\""));
@@ -871,5 +866,126 @@ TEST_F(DocExamples, SourceLocationTestingYourOwnCode) {
         EXPECT_LT(s.find("\"source\""), s.find("\"user\""));
     }
 }
+
+// ===========================================================================
+// source_location.md and advanced/stack_traces.md : stack traces
+// ===========================================================================
+//
+// These examples compile and run whether or not LOGCHAIN_WITH_STACKTRACE is
+// defined: the pages state that the same code is accepted and inert when the
+// feature is disabled. Only the frames (and the renderer option, which is
+// documented for the enabled feature) depend on LOGCHAIN_STACKTRACE_ENABLED.
+// Frames are identified through function names only (doc_connect or, if the
+// optimizer removed it, TestBody): file and line numbers need debug information.
+
+// connect() of the "Quick start".
+void doc_connect(int attempt) {
+    if (attempt > 1) {
+        throw_traced(std::runtime_error{"connection refused"});
+    }
+}
+
+// "Quick start", step 2: the thrown object is still a std::runtime_error.
+TEST_F(DocExamples, StackTracesThrowTracedStillThrowsTheOriginalType) {
+    EXPECT_NO_THROW(doc_connect(1));
+
+    bool caught = false;
+
+    try {
+        doc_connect(2);
+    } catch (const std::runtime_error &ex) {
+        caught = true;
+        EXPECT_STREQ(ex.what(), "connection refused");
+    }
+
+    EXPECT_TRUE(caught);
+}
+
+// "Quick start", step 3 and "Output layout": caused_by(ex) right after the
+// message is not a format argument, the trace is printed below the event line
+// (console) or as a "stacktrace" array before the context fields (JSON).
+// The console uses SourceMode::Short, as in the page's example output.
+TEST_F(DocExamples, StackTracesQuickStart) {
+    std::ostringstream console_out;
+    ConsoleSink console_sink{console_out};
+    FileSink file_sink{path("application.log")};
+
+    Logger logger{Target{ConsoleRenderer{.colors = ColorMode::Never, .source = SourceMode::Short}, console_sink},
+                  Target{JsonRenderer{}, file_sink}};
+
+    const std::string request_id{"req-A"};
+    int line = 0;
+
+    try {
+        doc_connect(2);
+    } catch (const std::exception &ex) { LOG_ERROR(logger, "Request failed: {}", caused_by(ex), ex.what(), extra(request_id)); line = __LINE__; }
+
+    // Console: the event line is the same with or without stack traces.
+    const auto console = split_lines(normalize(console_out.str()));
+
+    ASSERT_FALSE(console.empty());
+    EXPECT_EQ(console[0], "[<TS>:ERROR:" + where(line) + "Request failed: connection refused  request_id=req-A");
+
+    const auto json = read_lines(path("application.log"));
+
+    ASSERT_EQ(json.size(), std::size_t{1});
+    EXPECT_TRUE(json[0].ends_with(R"("request_id":"req-A"})"));
+
+#if LOGCHAIN_STACKTRACE_ENABLED
+    // One line per frame, innermost first, numbered from #0.
+    ASSERT_GE(console.size(), std::size_t{2});
+    for (std::size_t i = 1; i < console.size(); ++i) {
+        EXPECT_TRUE(console[i].starts_with("  #" + std::to_string(i - 1) + " ")) << console[i];
+    }
+    EXPECT_TRUE(contains(console[1], "doc_connect") || contains(console[1], "TestBody")) << console[1];
+
+    // JSON: still a single line; the frames sit between the message and the context.
+    EXPECT_TRUE(contains(json[0], R"(,"stacktrace":[{"function":")"));
+    EXPECT_TRUE(contains(json[0], R"(}],"request_id":"req-A"})"));
+    EXPECT_LT(json[0].find("\"message\""), json[0].find("\"stacktrace\""));
+#else
+    EXPECT_EQ(console.size(), std::size_t{1});
+    EXPECT_FALSE(contains(json[0], "\"stacktrace\""));
+#endif
+}
+
+#if LOGCHAIN_STACKTRACE_ENABLED
+
+// "Renderer option": ConsoleRenderer{.stacktrace = false} turns the frames off,
+// JsonRenderer{.source = SourceMode::Short} keeps them (stacktrace = true).
+TEST_F(DocExamples, StackTracesRendererOption) {
+    CaptureSink console;
+    CaptureSink json;
+
+    Logger logger{Target{ConsoleRenderer{.colors = ColorMode::Never, .stacktrace = false}, console},
+                  Target{JsonRenderer{.source = SourceMode::Short}, json}};
+
+    try {
+        doc_connect(2);
+    } catch (const std::exception &ex) {
+        LOG_ERROR(logger, "Request failed: {}", caused_by(ex), ex.what());
+    }
+
+    EXPECT_EQ(split_lines(console.last()).size(), std::size_t{1});
+    EXPECT_TRUE(contains(json.last(), "\"source\":{"));
+    EXPECT_TRUE(contains(json.last(), "\"stacktrace\":["));
+    EXPECT_LT(json.last().find("\"source\""), json.last().find("\"stacktrace\""));
+}
+
+// "traced<E>": wrapping an existing exception with an explicit trace.
+TEST_F(DocExamples, StackTracesWrapAnExistingException) {
+    bool caught = false;
+
+    try {
+        throw traced<std::logic_error>(std::logic_error{"..."}, std::stacktrace::current());
+    } catch (const std::logic_error &ex) {
+        caught = true;
+        EXPECT_NE(dynamic_cast<const traced_base *>(&ex), nullptr);
+    }
+
+    EXPECT_TRUE(caught);
+}
+
+#endif // LOGCHAIN_STACKTRACE_ENABLED
 
 } // namespace

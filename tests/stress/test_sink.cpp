@@ -42,23 +42,23 @@ int main() {
 
         std::string user{"bob"};
         int retry_count{3};
-        LOG(file_logger, LogLevel::info, "premiere ligne", user);
-        LOG(file_logger, LogLevel::info, "deuxieme ligne", retry_count);
-    }
-    {
-        std::ifstream in(log_path);
-        std::string line1, line2;
-        std::getline(in, line1);
-        std::getline(in, line2);
-        const std::regex line1_re(
-            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"premiere ligne","user":"bob"\})");
+        LOG(file_logger, LogLevel::info, "first line", user); 
+        LOG(file_logger, LogLevel::info, "second line", retry_count); 
+        } 
+        { 
+        std::ifstream in(log_path); 
+        std::string line1, line2; 
+        std::getline(in, line1); 
+        std::getline(in, line2); 
+        const std::regex line1_re( 
+        R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"first line","user":"bob"\})"); 
 
-        const std::regex line2_re(
-            R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"deuxieme ligne","retry_count":3\})");
+        const std::regex line2_re( 
+        R"(\{"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"second line","retry_count":3\})"); 
 
-        assert(std::regex_match(line1, line1_re));
-        assert(std::regex_match(line2, line2_re));
-        std::cout << "Fichier relu correctement :\n  " << line1 << "\n  " << line2 << "\n";
+        assert(std::regex_match(line1, line1_re)); 
+        assert(std::regex_match(line2, line2_re)); 
+        std::cout << "File read correctly:\n " << line1 << "\n " << line2 << "\n";
     }
 
     // Concurrency: N threads, each with M logs, a single shared
@@ -101,10 +101,12 @@ int main() {
 
         assert(line_count == static_cast<std::size_t>(kThreads * kLogsPerThread));
 
-        std::cout << "Concurrence : " << line_count << " lignes écrites par 8 threads, aucune corruption.\n";
+    std::cout << "Concurrency: " << line_count << " lines written by 8 threads, no corruption.\n";
+
     }
 
     fs::remove(log_path);
-    std::cout << "OK — toutes les vérifications du sink sont passées.\n";
+
+    std::cout << "OK — all sink checks passed.\n";
     return 0;
 }

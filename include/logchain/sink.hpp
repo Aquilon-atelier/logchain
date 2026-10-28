@@ -151,7 +151,7 @@ inline std::string reserve_file_sink_path(const std::filesystem::path &path) {
     std::lock_guard lock(file_sink_registry_mutex);
 
     if (!file_sink_registry.insert(key).second) {
-        throw std::runtime_error("FileSink: le fichier '" + path.string() + "' est deja utilise par un autre FileSink");
+        throw std::runtime_error("FileSink: the file '" + path.string() + "' is already in use by another FileSink");
     }
 
     return key;
@@ -220,13 +220,13 @@ class FileSink final : public Sink {
         stream_ << message << '\n';
 
         if (!stream_) {
-            throw std::runtime_error("FileSink: erreur lors de l'ecriture dans '" + path_.string() + "'");
+            throw std::runtime_error("FileSink: error while writing to '" + path_.string() + "'");
         }
 
         stream_.flush();
 
         if (!stream_) {
-            throw std::runtime_error("FileSink: erreur lors du flush de '" + path_.string() + "'");
+            throw std::runtime_error("FileSink: error flushing '" + path_.string() + "'");
         }
 
         current_size_ += bytes;
@@ -235,16 +235,16 @@ class FileSink final : public Sink {
   private:
     void validate_settings() const {
         if (path_.empty()) {
-            throw std::invalid_argument("FileSink: le chemin du fichier ne peut pas etre vide");
+            throw std::invalid_argument("FileSink: file path cannot be empty");
         }
 
         if (rotation_ == Rotation::enabled) {
             if (max_files_ == 0) {
-                throw std::invalid_argument("FileSink: max_files doit etre superieur a zero");
+                throw std::invalid_argument("FileSink: max_files must be greater than zero");
             }
 
             if (max_file_size_ == 0) {
-                throw std::invalid_argument("FileSink: max_file_size doit etre superieur a zero");
+                throw std::invalid_argument("FileSink: max_file_size must be greater than zero");
             }
         }
     }
@@ -254,16 +254,15 @@ class FileSink final : public Sink {
 
         if (std::filesystem::exists(path_, ec) && !ec) {
             if (!std::filesystem::is_regular_file(path_, ec) || ec) {
-                throw std::runtime_error("FileSink: '" + path_.string() + "' n'est pas un fichier regulier");
+                throw std::runtime_error("FileSink: '" + path_.string() + "' is not a regular file");
             }
 
             current_size_ = std::filesystem::file_size(path_, ec);
             if (ec) {
-                throw std::runtime_error("FileSink: impossible de determiner la taille de '" + path_.string() +
-                                         "': " + ec.message());
+                throw std::runtime_error("FileSink: Unable to determine size of '" + path_.string() + "': " + ec.message());
             }
         } else if (ec) {
-            throw std::runtime_error("FileSink: impossible d'acceder a '" + path_.string() + "': " + ec.message());
+            throw std::runtime_error("FileSink: Unable to access '" + path_.string() + "': " + ec.message());
         } else {
             current_size_ = 0;
         }
@@ -271,7 +270,7 @@ class FileSink final : public Sink {
         stream_.open(path_, std::ios::app);
 
         if (!stream_) {
-            throw std::runtime_error("FileSink: impossible d'ouvrir '" + path_.string() + "'");
+            throw std::runtime_error("FileSink: unable to open '" + path_.string() + "'");
         }
     }
 
@@ -284,7 +283,7 @@ class FileSink final : public Sink {
         std::filesystem::remove(path, ec);
 
         if (ec) {
-            throw std::runtime_error("FileSink: impossible de supprimer '" + path.string() + "': " + ec.message());
+            throw std::runtime_error("FileSink: Unable to delete '" + path.string() + "': " + ec.message());
         }
     }
 
@@ -293,8 +292,7 @@ class FileSink final : public Sink {
         std::filesystem::rename(from, to, ec);
 
         if (ec) {
-            throw std::runtime_error("FileSink: impossible de renommer '" + from.string() + "' vers '" + to.string() +
-                                     "': " + ec.message());
+            throw std::runtime_error("FileSink: Unable to rename '" + from.string() + "'to '" + to.string() + "': " + ec.message());
         }
     }
 
@@ -303,7 +301,7 @@ class FileSink final : public Sink {
         stream_.close();
 
         if (!stream_) {
-            throw std::runtime_error("FileSink: impossible de fermer '" + path_.string() + "' avant rotation");
+            throw std::runtime_error("FileSink: Unable to close '" + path_.string() + "' before rotation");
         }
 
         if (max_files_ == 1) {
@@ -336,8 +334,7 @@ class FileSink final : public Sink {
             const bool exists = std::filesystem::exists(from, exists_ec);
 
             if (exists_ec) {
-                throw std::runtime_error("FileSink: impossible de verifier '" + from.string() +
-                                         "': " + exists_ec.message());
+                throw std::runtime_error("FileSink: could not verify '" + from.string() + "': " + exists_ec.message());
             }
 
             if (exists) {
@@ -354,8 +351,7 @@ class FileSink final : public Sink {
             const bool exists = std::filesystem::exists(first_archive, exists_ec);
 
             if (exists_ec) {
-                throw std::runtime_error("FileSink: impossible de verifier '" + first_archive.string() +
-                                         "': " + exists_ec.message());
+                throw std::runtime_error("FileSink: could not verify '" + first_archive.string() + "': " + exists_ec.message());
             }
 
             if (exists) {
@@ -369,8 +365,7 @@ class FileSink final : public Sink {
         stream_.open(path_, std::ios::out | std::ios::trunc);
 
         if (!stream_) {
-            throw std::runtime_error("FileSink: impossible d'ouvrir le nouveau fichier '" + path_.string() +
-                                     "' apres rotation");
+            throw std::runtime_error("FileSink: unable to open new file '" + path_.string() + "' after rotation");
         }
 
         current_size_ = 0;
