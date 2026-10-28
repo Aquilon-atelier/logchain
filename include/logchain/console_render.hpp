@@ -266,7 +266,7 @@ template <typename T> void append_console_value(std::string &out, const T &value
 
     } else {
 
-        static_assert(!sizeof(T), "ConsoleRenderer: type non pris en charge.");
+        static_assert(!sizeof(T), "ConsoleRenderer: unsupported type.");
     }
 }
 

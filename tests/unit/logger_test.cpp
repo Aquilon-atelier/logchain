@@ -50,9 +50,9 @@ TEST(console_sink, mem_check) {
     const void *user_node_via_a = request_a.underlying_node()->parent->parent.get();
     const void *user_node_via_b = request_b.underlying_node()->parent->parent.get();
     assert(user_node_via_a == user_node_via_b);
-    std::cout << "Partage mémoire du nœud User confirmé (adresse " << user_node_via_a << ")\n";
+    std::cout << "User node memory sharing confirmed (address " << user_node_via_a << ")\n";
 
-    assert(with_user.underlying_node()->value == "bob"); // with_user inchangé
+    assert(with_user.underlying_node()->value == "bob");
     std::cout << "with_user (inchangé) : " << with_user.underlying_node()->value << "\n";
 }
 

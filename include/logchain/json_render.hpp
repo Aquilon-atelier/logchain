@@ -229,7 +229,7 @@ inline void collect_json_fields(const RootNode &, std::vector<std::string> &) {}
 
 template <typename T, typename ParentNode>
 void collect_json_fields(const ContextNode<T, ParentNode> &node, std::vector<std::string> &out) {
-    collect_json_fields(*node.parent, out); // parents d'abord : ordre d'origine
+    collect_json_fields(*node.parent, out); // parents first: original order
     std::string entry = detail::json_escape_string(node.name);
     entry += ':';
     entry += to_json(node.value);

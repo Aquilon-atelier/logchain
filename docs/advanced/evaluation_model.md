@@ -4,8 +4,7 @@ Previous step [Stack Traces](stack_traces.md) · [Advanced](index.md) · Next st
 
 ## In brief
 
-`logchain` filters events by level **before** doing any work for them. What differs between the logging APIs is whether the **arguments** of a disabled statement are still evaluated.  
-This page states precisely what each API evaluates, what it costs, and how the macros are built.
+`logchain` filters events by level **before** doing any work for them. What differs between the logging APIs is whether the **arguments** of a disabled statement are still evaluated. This page states precisely what each API evaluates, what it costs, and how the macros are built.
 
 **Read this page if** you log from performance-sensitive code, if your log arguments have side effects or are expensive, or if a `logchain` macro collides with another library. For everyday use, the [Log Level and Filtering](../log_level_filtering.md) guide is enough.
 
@@ -33,7 +32,7 @@ LOG_DEBUG(logger, "x = {}", f())
 | API | Level checked before arguments are evaluated | Arguments of a disabled statement | Level |
 | :-- | :-: | :-- | :-- |
 | `LOG_TRACE` ... `LOG_FATAL` | Yes | **Not evaluated** | Fixed at the call site |
-| `LOG(logger, level, ...)` | Yes | **Not evaluated** | Any expression |
+| `LOG(logger, level, ...)` | Yes | **Not evaluated** | A variable or a constant (the expression is evaluated twice, see [Macros](#macros)) |
 | `if (auto log = logger.debug())` | Yes | **Not evaluated** (the body is skipped) | Fixed at the call site |
 | `logger.log(level, ...)` | No: the check is inside the call | **Evaluated** (they are function arguments) | Any expression |
 
@@ -51,7 +50,8 @@ Consequences:
 
 * a macro is a statement, not an expression: it cannot be used inside a larger expression;
 * arguments that contain a comma outside parentheses (a template argument list, for instance) need an extra pair of parentheses, as for any macro;
-* `extra(a, b, c)` expands to named arguments built from the **spelling** of each expression (`"a"`, `"b"`, `"c"`). It is itself a macro and is only evaluated when the level is enabled.
+* `extra(a, b, c)` expands to named arguments built from the **spelling** of each expression (`"a"`, `"b"`, `"c"`). It is itself a macro and is only evaluated when the level is enabled;
+* the `level` argument of `LOG(logger, level, ...)` appears **twice** in the expansion: in the `is_enabled(level)` test and in the call to `log_unchecked`. An expression with side effects is therefore evaluated twice when the level is enabled, and once when it is disabled. Pass a variable or a constant, as in `LogLevel level = get_log_level(); LOG(logger, level, "...");`. `LOG_TRACE` ... `LOG_FATAL` are not concerned: their level is a constant.
 
 ### Lazy proxy
 
@@ -76,7 +76,7 @@ LOGCHAIN_LOG(logger, level, "dynamic level");
 
 * The minimum level is a **per-logger** setting. Changing one logger does not change another.
 * Filtering never depends on the sinks or the renderers: a disabled event is never built, rendered or written.
-* The `logger` expression of a macro is evaluated once. The message and arguments are evaluated at most once, and only if the level is enabled.
+* The `logger` expression of a macro is evaluated once. The message and arguments are evaluated at most once, and only if the level is enabled. The `level` argument of `LOG` is the exception: see [Macros](#macros).
 * `logger.log(level, ...)` evaluates its arguments **before** entering the function. No implementation of this API can avoid that.
 
 ## Cost
@@ -103,6 +103,7 @@ LOGCHAIN_LOG(logger, level, "dynamic level");
 | :------ | :---------- | :--------- |
 | `logger.log(LogLevel::debug, expensive())` | `expensive()` is called even when `DEBUG` is disabled | Use `LOG_DEBUG` or the proxy. |
 | Relying on a side effect in the arguments of a macro (`LOG_DEBUG(logger, "{}", ++n)`) | `n` changes only when the level is enabled | Keep arguments free of side effects. |
+| `LOG(logger, next_level(), ...)` | `next_level()` is called twice when the level is enabled, and the two results can differ | Store the level in a variable first. |
 | Storing `auto log = logger.debug();` beyond the logger | Dangling reference | Use the proxy in the condition of an `if`. |
 | Another library defining `LOG_INFO`, `LOG`... | Macro redefinition | Define `LOGCHAIN_NO_SHORT_MACROS`, then use the `LOGCHAIN_*` forms. |
 | Defining `LOGCHAIN_NO_SHORT_MACROS` after the include | No effect | Define it before the first `logchain` include, or on the command line. |
