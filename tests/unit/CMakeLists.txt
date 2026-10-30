@@ -36,6 +36,7 @@ add_executable(${PROJECT_NAME}_unit_tests
     source_location_test.cpp
     stacktrace_test.cpp
     doc_example_test.cpp
+    reflection_workaround_test.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_unit_tests
