@@ -1,4 +1,4 @@
-Previous step [Evaluation Model and Level Filtering](evaluation_model.md) · [Advanced](index.md)
+Previous step [Evaluation Model and Level Filtering](evaluation_model.md) · [Advanced](index.md) · Next step [Journal Mode: Output for systemd](journal_mode.md)
 
 # FileSink: Guarantees and Edge Cases
 
@@ -108,4 +108,4 @@ If a rotation fails midway, the state of the files and of the stream is not guar
 | Ignoring exceptions of `write` | A full disk or a permission error reaches the caller of the log statement | Decide where to handle them in your application. |
 | Two `ConsoleSink` on the same stream | Entries can interleave | Share one `ConsoleSink`. |
 
-Previous step [Evaluation Model and Level Filtering](evaluation_model.md) · [Advanced](index.md)
+Previous step [Evaluation Model and Level Filtering](evaluation_model.md) · [Advanced](index.md) · Next step [Journal Mode: Output for systemd](journal_mode.md)

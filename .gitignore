@@ -2,3 +2,5 @@
 **/manual_tests
 CMakeUserPresets.json
 *.output
+Testing/
+tests/Testing/

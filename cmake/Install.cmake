@@ -42,7 +42,7 @@ install(EXPORT ${PROJECT_NAME}Targets
 )
 
 configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/logchainConfig.cmake.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
     INSTALL_DESTINATION 
         ${CMAKE_INSTALL_LIBDIR}/cmake/logchain

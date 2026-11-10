@@ -14,6 +14,7 @@
 | [Stack Traces](stack_traces.md) | you want to print where an exception was thrown, you need to know exactly when a trace is printed and what it costs, or you build without CMake. |
 | [Evaluation Model and Level Filtering](evaluation_model.md) | you log from performance-sensitive code and need to know which APIs evaluate their arguments, or you have a macro name collision. |
 | [FileSink: Guarantees and Edge Cases](file_sink.md) | you share a `FileSink` between loggers or threads, or you need to know how rotation and write errors behave. |
+| [Journal Mode: Output for systemd](journal_mode.md) | your program runs as a systemd service, or you need the exact layouts and the detection rules of the journal mode. |
 
 ## How the pages are organized
 

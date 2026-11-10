@@ -21,12 +21,15 @@
 #include <logchain/event.hpp>
 #include <logchain/stacktrace.hpp>
 
+#include <charconv>
 #include <cstddef>
+#include <cstdlib>
 #include <meta>
 #include <optional>
 #include <source_location>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <vector>
 
@@ -37,6 +40,7 @@
 #endif
 #define LOGCHAIN_ISATTY _isatty
 #else
+#include <sys/stat.h>
 #include <unistd.h>
 #define LOGCHAIN_ISATTY isatty
 #endif
@@ -44,6 +48,15 @@
 namespace logchain {
 
 enum class ColorMode { Auto, Always, Never };
+
+// Journal mode: output shaped for a process whose stdout is captured by
+// journald (systemd service). Each line gets a "<N>" priority prefix
+// (sd-daemon convention, stripped by journald) and the timestamp is omitted
+// because journald records its own.
+//   Auto   : enabled when stdout is connected to the journal.
+//   Always : always enabled.
+//   Never  : never enabled (plain console output).
+enum class JournalMode { Auto, Always, Never };
 
 namespace detail {
 
@@ -133,6 +146,126 @@ inline bool console_use_color(ColorMode colors) {
     }
 
     return false;
+}
+
+// ===========================================================================
+// Journal mode
+// ===========================================================================
+
+// True when stdout is the stream systemd connected to the journal.
+// systemd sets JOURNAL_STREAM="<device>:<inode>" for such services; comparing
+// it with fstat(stdout) avoids false positives when stdout was redirected
+// elsewhere. POSIX only: always false on Windows.
+inline bool journal_stdout_connected() {
+
+#if defined(_WIN32)
+    return false;
+#else
+    const char *env = std::getenv("JOURNAL_STREAM");
+
+    if (env == nullptr) {
+        return false;
+    }
+
+    const std::string_view value{env};
+    const auto colon = value.find(':');
+
+    if (colon == std::string_view::npos) {
+        return false;
+    }
+
+    const char *const first = value.data();
+    const char *const middle = first + colon;
+    const char *const last = first + value.size();
+
+    unsigned long long device = 0;
+    unsigned long long inode = 0;
+
+    const auto device_result = std::from_chars(first, middle, device);
+    const auto inode_result = std::from_chars(middle + 1, last, inode);
+
+    if (device_result.ec != std::errc{} || device_result.ptr != middle || inode_result.ec != std::errc{} ||
+        inode_result.ptr != last) {
+        return false;
+    }
+
+    struct stat st;
+
+    if (fstat(STDOUT_FILENO, &st) != 0) {
+        return false;
+    }
+
+    return static_cast<unsigned long long>(st.st_dev) == device && static_cast<unsigned long long>(st.st_ino) == inode;
+#endif
+}
+
+// Resolves JournalMode. The detection runs once per process (the environment
+// and stdout do not change under a running service).
+inline bool console_use_journal(JournalMode mode) {
+
+    switch (mode) {
+    case JournalMode::Always:
+        return true;
+
+    case JournalMode::Never:
+        return false;
+
+    case JournalMode::Auto: {
+        static const bool connected = journal_stdout_connected();
+        return connected;
+    }
+    }
+
+    return false;
+}
+
+// syslog(3) priorities, as understood by the "<N>" prefix.
+inline constexpr int journal_priority(LogLevel level) {
+
+    switch (level) {
+    case LogLevel::trace:
+    case LogLevel::debug:
+        return 7; // LOG_DEBUG
+
+    case LogLevel::info:
+        return 6; // LOG_INFO
+
+    case LogLevel::warning:
+        return 4; // LOG_WARNING
+
+    case LogLevel::error:
+        return 3; // LOG_ERR
+
+    case LogLevel::fatal:
+        return 2; // LOG_CRIT
+    }
+
+    return 6;
+}
+
+// Prefixes EVERY line of `out` with "<N>": journald turns each line into its
+// own entry, so stack-trace frames and multi-line messages must carry the
+// event's priority too.
+inline void apply_journal_priority(std::string &out, LogLevel level) {
+
+    std::string prefix = "<";
+    prefix += std::to_string(journal_priority(level));
+    prefix += '>';
+
+    std::string result;
+    result.reserve(out.size() + prefix.size() * 4);
+
+    result += prefix;
+
+    for (const char ch : out) {
+        result += ch;
+
+        if (ch == '\n') {
+            result += prefix;
+        }
+    }
+
+    out = std::move(result);
 }
 
 inline void append_console_level(std::string &out, LogLevel level, bool use_color) {
@@ -310,7 +443,8 @@ inline void append_console_gray(std::string &out, std::string_view text, bool us
 }
 
 template <typename Event>
-void append_console_located_prefix(std::string &out, const Event &event, SourceMode mode, bool use_color) {
+void append_console_located_prefix(std::string &out, const Event &event, SourceMode mode, bool use_color,
+                                   bool with_timestamp) {
 
     std::string_view level_name = console_level_name(event.level);
 
@@ -321,8 +455,11 @@ void append_console_located_prefix(std::string &out, const Event &event, SourceM
     const std::string_view file = event.where->file_name();
 
     std::string head = "[";
-    head += format_timestamp(event.timestamp);
-    head += ':';
+
+    if (with_timestamp) {
+        head += format_timestamp(event.timestamp);
+        head += ':';
+    }
 
     std::string tail = ":";
     tail += (mode == SourceMode::Short) ? source_basename(file) : file;
@@ -409,6 +546,10 @@ struct ConsoleRenderer {
     // (error and fatal events only). Independent of `source`; ignored when
     // LOGCHAIN_WITH_STACKTRACE is not defined.
     bool stacktrace = true;
+    // Journal mode (see JournalMode). Kept last so existing designated
+    // initializers ({.colors = ..., .source = ..., .stacktrace = ...}) still
+    // compile.
+    JournalMode journal = JournalMode::Auto;
 
     template <typename Event, typename NodeT>
     std::string render(const Event &event, const Context<NodeT> &context) const {
@@ -418,13 +559,18 @@ struct ConsoleRenderer {
         out.reserve(event.message.size() + 96);
 
         const bool use_color = detail::console_use_color(colors);
+        const bool use_journal = detail::console_use_journal(journal);
         const bool located = source != SourceMode::Never && event.where.has_value();
 
         if (located) {
-            detail::append_console_located_prefix(out, event, source, use_color);
+            detail::append_console_located_prefix(out, event, source, use_color, !use_journal);
         } else {
-            out += detail::format_timestamp(event.timestamp);
-            out += " [";
+            if (!use_journal) {
+                out += detail::format_timestamp(event.timestamp);
+                out += ' ';
+            }
+
+            out += '[';
 
             detail::append_console_level(out, event.level, use_color);
 
@@ -441,6 +587,10 @@ struct ConsoleRenderer {
 
         if (stacktrace) {
             detail::append_console_stacktrace(out, detail::resolve_event_stack_frames(event), use_color);
+        }
+
+        if (use_journal) {
+            detail::apply_journal_priority(out, event.level);
         }
 
         return out;

@@ -1,4 +1,4 @@
-Previous step [Log Level and Filtering](log_level_filtering.md) · [Index](index.md) · Next step [Advanced](advanced/index.md)
+Previous step [Log Level and Filtering](log_level_filtering.md) · [Index](index.md) · Next step [Running as a Daemon (systemd)](daemon.md)
 
 # Call Site: Source Location and Stack Traces
 
@@ -323,4 +323,4 @@ Without `LOGCHAIN_WITH_STACKTRACE`, the same code compiles and runs unchanged: `
 
 Build without CMake (where to put `-lstdc++exp`), the exact conditions, the JSON layout, what a trace contains, its cost and the design choices are described in [Stack Traces](advanced/stack_traces.md).
 
-Previous step [Log Level and Filtering](log_level_filtering.md) · [Index](index.md) · Next step [Advanced](advanced/index.md)
+Previous step [Log Level and Filtering](log_level_filtering.md) · [Index](index.md) · Next step [Running as a Daemon (systemd)](daemon.md)

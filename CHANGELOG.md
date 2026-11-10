@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `JournalMode` option (`journal`) for `ConsoleRenderer`: when the standard output is connected to the systemd journal, each line carries its priority (`<N>`) and the timestamp is omitted. See [Running as a Daemon (systemd)](docs/daemon.md).
+
+### Changed
+
+- `ConsoleRenderer` now defaults to `JournalMode::Auto`. The console output changes only for a process whose standard output is connected to the journal; use `.journal = JournalMode::Never` to keep the previous output.
+
 ## [1.0.0] - 2026-10-28
 
 ### Added
